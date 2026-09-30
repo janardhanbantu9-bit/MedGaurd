@@ -33,3 +33,12 @@ Thumbs.db
 .vscode/
 .idea/
 .vercel
+
+# Local environment / generated files
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+temp-auth-wiring.patch
+vite-env-fix.patch
+MediGuard-vite-env-fix*.zip
