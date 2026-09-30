@@ -1,81 +1,145 @@
 // @ts-nocheck
 import React from 'react';
-import { Database, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Database, AlertTriangle, AlertCircle, ChevronRight } from 'lucide-react';
 import { Badge, Button, Card } from '../components/ui';
 
-const AnalysisScreen = ({ analysisResult, setSelectedFinding }) => {
-  const findings = analysisResult?.findings || [];
-  const highRiskCount = analysisResult?.summary?.high ?? 0;
-  const reviewCount = analysisResult?.summary?.review ?? 0;
-  const safeCount = analysisResult?.summary?.safe ?? 0;
-  const checksPerformed = Math.max(0, highRiskCount + reviewCount + safeCount);
+const AnalysisScreen = ({ analysis, setSelectedFinding, setView }) => {
+  if (!analysis) {
+    return (
+      <div className="p-8 max-w-3xl mx-auto text-center">
+        <h1 className="text-2xl font-semibold text-[#17211B] mb-2">No analysis yet</h1>
+        <p className="text-[#66736B] mb-6">Enter a prescription and run the safety analysis to see findings here.</p>
+        <Button onClick={() => setView('input-rx')}>Input New Prescription</Button>
+      </div>
+    );
+  }
+
+  const findings = analysis.findings;
+  const highRiskCount = analysis.summary.high;
+  const reviewCount = analysis.summary.review;
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
       <div className="mb-8">
         <h1 className="text-3xl font-semibold text-[#17211B] mb-3 tracking-tight">Medication Safety Analysis</h1>
-        <p className="text-[#66736B]">Live backend result from analysis <span className="font-mono text-xs">{analysisResult?.analysisId}</span>.</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-          <div className="bg-white border border-[#DCE5DF] rounded-lg p-4 flex items-center gap-4 shadow-sm">
-            <Database className="text-gray-400" size={20}/>
-            <div><div className="text-2xl font-semibold">{checksPerformed}</div><div className="text-xs text-[#66736B] uppercase tracking-wider font-medium">Findings returned</div></div>
+        {/* Summary Metrics */}
+        <div className="flex gap-4 mt-6">
+          <div className="bg-white border border-[#DCE5DF] rounded-lg p-4 flex-1 flex items-center gap-4 shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center">
+              <Database className="text-gray-400" size={20}/>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold text-[#17211B]">{analysis.checksPerformed}</div>
+              <div className="text-xs text-[#66736B] uppercase tracking-wider font-medium">Checks Performed</div>
+            </div>
           </div>
-          <div className="bg-white border border-red-200 rounded-lg p-4 flex items-center gap-4 shadow-sm relative overflow-hidden">
-            <AlertTriangle className="text-red-500" size={20}/>
-            <div><div className="text-2xl font-semibold">{highRiskCount}</div><div className="text-xs text-red-700 uppercase tracking-wider font-medium">High Risk</div></div>
+
+          <div className="bg-white border border-red-200 rounded-lg p-4 flex-1 flex items-center gap-4 shadow-sm relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+              <AlertTriangle className="text-red-500" size={20}/>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold text-[#17211B]">{highRiskCount}</div>
+              <div className="text-xs text-red-700 uppercase tracking-wider font-medium">High Risk Findings</div>
+            </div>
           </div>
-          <div className="bg-white border border-amber-200 rounded-lg p-4 flex items-center gap-4 shadow-sm relative overflow-hidden">
-            <AlertCircle className="text-amber-500" size={20}/>
-            <div><div className="text-2xl font-semibold">{reviewCount}</div><div className="text-xs text-amber-700 uppercase tracking-wider font-medium">Require Review</div></div>
-          </div>
-          <div className="bg-white border border-emerald-200 rounded-lg p-4 flex items-center gap-4 shadow-sm relative overflow-hidden">
-            <CheckCircle2 className="text-emerald-600" size={20}/>
-            <div><div className="text-2xl font-semibold">{safeCount}</div><div className="text-xs text-emerald-700 uppercase tracking-wider font-medium">Passed</div></div>
+
+          <div className="bg-white border border-amber-200 rounded-lg p-4 flex-1 flex items-center gap-4 shadow-sm relative overflow-hidden">
+             <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400"></div>
+            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center">
+              <AlertCircle className="text-amber-500" size={20}/>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold text-[#17211B]">{reviewCount}</div>
+              <div className="text-xs text-amber-700 uppercase tracking-wider font-medium">Require Review</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-[#66736B] uppercase tracking-wider mb-4 border-b border-[#DCE5DF] pb-2">Detailed Findings</h2>
-
-        {findings.length === 0 ? (
-          <Card className="border-dashed">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-full bg-[#E8F5EF] flex items-center justify-center">
-                <CheckCircle2 className="text-[#087F5B]" size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[#17211B]">Analysis pipeline connected</h3>
-                <p className="text-sm text-[#66736B] mt-1">No safety findings were generated yet because the deterministic safety rules are the next backend layer. This screen intentionally does not invent warnings.</p>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          findings.map((finding) => {
-            const isHigh = finding.severity === 'high';
-            const isReview = finding.severity === 'review';
-            const variant = isHigh ? 'red' : isReview ? 'amber' : 'green';
-            return (
-              <Card key={finding.id || `${finding.category}-${finding.title}`} onClick={() => setSelectedFinding(finding)} className={isHigh ? 'border-red-200' : isReview ? 'border-amber-200' : 'border-emerald-200'}>
-                <div className="flex items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-[#66736B]">{finding.category}</span>
-                      <Badge variant={variant}>{finding.status || (isHigh ? 'High Risk' : isReview ? 'Needs Review' : 'Passed')}</Badge>
-                    </div>
-                    <h3 className="text-lg font-semibold text-[#17211B] mb-2">{finding.title}</h3>
-                    <p className="text-sm text-[#66736B] line-clamp-2 leading-relaxed">{finding.summary}</p>
-                  </div>
-                  <Button variant="ghost" size="sm" icon={ChevronRight} className="text-[#087F5B]">View Details</Button>
-                </div>
-              </Card>
-            );
-          })
+        {analysis.warnings?.length > 0 && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <ul className="list-disc pl-5 space-y-1">
+              {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
         )}
       </div>
 
-      <div className="mt-8 text-xs text-[#66736B]">Clinical decision support. Final decisions remain with a qualified healthcare professional.</div>
+      <div className="space-y-4">
+        <h2 className="text-sm font-semibold text-[#66736B] uppercase tracking-wider mb-4 border-b border-[#DCE5DF] pb-2">
+          Detailed Findings
+        </h2>
+
+        {findings.map(finding => {
+          const isHigh = finding.severity === 'high';
+          const isReview = finding.severity === 'review';
+          const isSafe = finding.severity === 'safe';
+
+          let borderClass = 'border-[#DCE5DF] hover:border-gray-300';
+          let iconBg = 'bg-gray-100';
+          let iconColor = 'text-gray-500';
+
+          if (isHigh) {
+            borderClass = 'border-red-200 hover:border-red-300';
+            iconBg = 'bg-red-50';
+            iconColor = 'text-red-600';
+          } else if (isReview) {
+            borderClass = 'border-amber-200 hover:border-amber-300';
+            iconBg = 'bg-amber-50';
+            iconColor = 'text-amber-600';
+          } else if (isSafe) {
+            borderClass = 'border-emerald-200 hover:border-emerald-300';
+            iconBg = 'bg-emerald-50';
+            iconColor = 'text-emerald-600';
+          }
+
+          return (
+            <Card 
+              key={finding.id} 
+              onClick={() => setSelectedFinding(finding)}
+              className={`transition-all duration-200 ${borderClass}`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`mt-1 p-2.5 rounded-full ${iconBg} ${iconColor} shrink-0`}>
+                  <finding.icon size={20} strokeWidth={2.5} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-[#66736B]">{finding.category}</span>
+                    <span className="text-gray-300">•</span>
+                    <Badge variant={isHigh ? 'red' : isReview ? 'amber' : 'green'}>{finding.status}</Badge>
+                  </div>
+
+                  <h3 className="text-lg font-semibold text-[#17211B] mb-2">{finding.title}</h3>
+                  <p className="text-sm text-[#66736B] line-clamp-2 leading-relaxed mb-4 max-w-3xl">
+                    {finding.summary}
+                  </p>
+
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                       <span className="text-xs text-[#66736B]">Involves:</span>
+                       <div className="flex gap-1.5">
+                         {finding.affectedMeds.map((med, idx) => (
+                           <span key={idx} className="text-xs font-medium bg-gray-100 text-gray-700 px-2 py-0.5 rounded border border-gray-200">
+                             {med}
+                           </span>
+                         ))}
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center justify-center h-full pt-4">
+                   <Button variant="ghost" size="sm" icon={ChevronRight} className="text-[#087F5B]">View Details</Button>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -98,6 +98,16 @@ const FindingDetailPanel = ({ finding, onClose }) => {
                 <BookOpen size={14} />
                 {finding.evidenceSource}
               </p>
+              {finding.evidence?.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  {finding.evidence.map((item, idx) => (
+                    <blockquote key={idx} className="border-l-4 border-[#DCE5DF] bg-gray-50 px-4 py-3 text-sm text-[#17211B]">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-[#66736B] mb-1">{item.source}</div>
+                      {item.snippet}
+                    </blockquote>
+                  ))}
+                </div>
+              )}
            </div>
         </div>
 
