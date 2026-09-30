@@ -1,7 +1,7 @@
 const BASE = 'https://rxnav.nlm.nih.gov/REST';
 
 async function getJson(url) {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error(`RxNorm request failed: ${response.status}`);
   return response.json();
 }

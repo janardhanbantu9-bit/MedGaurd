@@ -52,7 +52,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error('MediGuard patients error:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to load patients',
+      error: error?.message || 'Failed to load patients',
     });
   }
 }

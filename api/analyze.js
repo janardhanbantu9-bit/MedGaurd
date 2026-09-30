@@ -2,11 +2,11 @@ import { analyzePrescription } from '../backend/pipeline/analyzePrescription.js'
 import { getSupabase } from '../backend/services/supabase.js';
 import { fail } from './_http.js';
 
-/** Best-effort history save. Never fails the analysis. */
+/** Best-effort history save. Never fails the analysis, but reports database errors. */
 async function saveAnalysis(patient, body, result) {
   try {
     if (!patient?.id || !/^[0-9a-f-]{36}$/i.test(patient.id)) return; // demo patient has no DB row
-    await getSupabase().from('analyses').insert({
+    const { error } = await getSupabase().from('analyses').insert({
       patient_id: patient.id,
       prescription_text: body.prescription || JSON.stringify(body.medications ?? []),
       status: result.status,
@@ -14,8 +14,9 @@ async function saveAnalysis(patient, body, result) {
       findings: result.findings,
       summary: result.summary,
     });
+    if (error) throw error;
   } catch (error) {
-    console.warn('Could not save analysis to Supabase:', error.message);
+    console.error('Could not save analysis to Supabase:', error.message);
   }
 }
 

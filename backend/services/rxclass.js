@@ -10,6 +10,7 @@ export async function getDrugClasses(rxcui) {
   try {
     const response = await fetch(`${BASE}/class/byRxcui.json?rxcui=${encodeURIComponent(rxcui)}`, {
       headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return [];
 

@@ -4,17 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "preview": "npm --prefix frontend run preview",
-    "vercel-build": "npm --prefix frontend run build"
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "preview": "cd frontend && npm run preview",
+    "vercel-build": "cd frontend && npm run build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "latest",
     "groq-sdk": "latest",
     "multer": "latest",
     "zod": "latest"
-  },
-  "engines": {
-    "node": "22.x"
   }
 }

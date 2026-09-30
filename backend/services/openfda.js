@@ -4,7 +4,7 @@ async function query(search) {
   const params = [`search=${encodeURIComponent(search)}`, 'limit=1'];
   if (process.env.OPENFDA_API_KEY) params.push(`api_key=${encodeURIComponent(process.env.OPENFDA_API_KEY)}`);
 
-  const response = await fetch(`${ENDPOINT}?${params.join('&')}`);
+  const response = await fetch(`${ENDPOINT}?${params.join('&')}`, { signal: AbortSignal.timeout(8000) });
 
   // openFDA answers 404 when nothing matches - that is "no label", not an error.
   if (response.status === 404) return null;
