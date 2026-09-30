@@ -1,4 +1,23 @@
+import { AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+export type ApiMedication = {
+  name: string;
+  dose?: string;
+  frequency?: string;
+  route?: string;
+  duration?: string;
+  rxCui?: string | null;
+};
+
+export type UiMedication = {
+  id: string;
+  name: string;
+  dose: string;
+  freq: string;
+  route: string;
+  intendedDuration: string;
+};
 
 async function authHeaders(): Promise<Record<string, string>> {
   if (!supabase) {
@@ -8,51 +27,35 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 
   const { data, error } = await supabase.auth.getSession();
-
   if (error) {
     console.error('Supabase session lookup failed:', error);
     throw new Error(`Authentication session error: ${error.message}`);
   }
 
   const token = data.session?.access_token;
+  if (!token) throw new Error('You are not signed in. Please sign in again.');
 
-  if (!token) {
-    throw new Error('You are not signed in. Please sign in again.');
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function readResponse(response: Response): Promise<any> {
   const data = await response.json().catch(() => null);
-
   if (!response.ok) {
-    const message =
-      data?.error ||
-      data?.message ||
-      `Request failed (${response.status} ${response.statusText})`;
-
-    throw new Error(message);
+    throw new Error(
+      data?.error || data?.message || `Request failed (${response.status} ${response.statusText})`
+    );
   }
-
   return data;
 }
 
 async function post<T>(path: string, payload: unknown): Promise<T> {
-  // Auth/session errors must stay outside the network try/catch.
   const auth = await authHeaders();
-
   let response: Response;
 
   try {
     response = await fetch(path, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...auth,
-      },
+      headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify(payload),
     });
   } catch (error) {
@@ -65,14 +68,10 @@ async function post<T>(path: string, payload: unknown): Promise<T> {
 
 async function get<T>(path: string): Promise<T> {
   const auth = await authHeaders();
-
   let response: Response;
 
   try {
-    response = await fetch(path, {
-      method: 'GET',
-      headers: auth,
-    });
+    response = await fetch(path, { method: 'GET', headers: auth });
   } catch (error) {
     console.error(`GET ${path} failed:`, error);
     throw new Error(`Could not reach ${path}. Check that the API server is running.`);
@@ -81,4 +80,87 @@ async function get<T>(path: string): Promise<T> {
   return (await readResponse(response)) as T;
 }
 
-export { get, post };
+function toUiMedication(m: ApiMedication, i: number): UiMedication {
+  return {
+    id: `em${Date.now()}-${i}`,
+    name: m.name,
+    dose: m.dose ?? '',
+    freq: m.frequency ?? '',
+    route: m.route ?? '',
+    intendedDuration: m.duration ?? '',
+  };
+}
+
+export async function ensureProfile(name?: string) {
+  const data = await post<{ patient: any; created: boolean }>('/api/profile', {
+    name: name?.trim() || undefined,
+  });
+  return data.patient;
+}
+
+export async function extractMedications(prescription: string): Promise<UiMedication[]> {
+  const data = await post<{ medications: ApiMedication[] }>('/api/extract', { prescription });
+  return (data.medications ?? []).map(toUiMedication);
+}
+
+export async function extractMedicationImage(file: File): Promise<UiMedication[]> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose a prescription image file.');
+  if (file.size > 4 * 1024 * 1024) throw new Error('Choose an image smaller than 4 MB.');
+
+  const image = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read image'));
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.readAsDataURL(file);
+  });
+
+  const data = await post<{ medications: ApiMedication[] }>('/api/vision-extract', { image });
+  return (data.medications ?? []).map(toUiMedication);
+}
+
+const SEVERITY_UI = {
+  high: { status: 'High Risk', icon: AlertTriangle },
+  review: { status: 'Needs Review', icon: AlertCircle },
+  safe: { status: 'No Flagged Conflict', icon: CheckCircle2 },
+} as const;
+
+export function toUiFinding(finding: any) {
+  const ui = SEVERITY_UI[finding.severity as keyof typeof SEVERITY_UI] ?? SEVERITY_UI.review;
+  return {
+    ...finding,
+    status: ui.status,
+    icon: ui.icon,
+    affectedMeds: finding.affectedMeds ?? [],
+    evidenceSource: finding.evidenceSource ?? 'Not specified',
+  };
+}
+
+export async function analyzeMedications(patient: unknown, medications: UiMedication[]) {
+  const data = await post<any>('/api/analyze', {
+    patient,
+    medications: medications.map((m) => ({
+      name: m.name,
+      dose: m.dose,
+      frequency: m.freq,
+      route: m.route,
+      duration: m.intendedDuration,
+    })),
+  });
+  return { ...data, findings: (data.findings ?? []).map(toUiFinding) };
+}
+
+export async function getPatients() {
+  const data = await get<{ patients?: any[] }>('/api/patients');
+  return data?.patients ?? [];
+}
+
+export async function getSafetyHistory(patientId: string) {
+  const query = new URLSearchParams({ patientId });
+  const data = await get<{ analyses?: any[] }>(`/api/history?${query}`);
+  return data?.analyses ?? [];
+}
+
+export async function chatWithAI(message: string, patient: unknown) {
+  const data = await post<{ answer: string }>('/api/chat', { message, patient });
+  return data.answer;
+}
