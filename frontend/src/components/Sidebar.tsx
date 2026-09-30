@@ -1,77 +1,61 @@
 // @ts-nocheck
 import React from 'react';
-import {
-  LayoutDashboard, Users, History, Database, Settings, FileSearch, UserCircle,
-} from 'lucide-react';
+import { House, ScanLine, History, CircleHelp, MessageCircle, HeartPulse } from 'lucide-react';
 import { Logo } from './ui';
 
 const Sidebar = ({ currentView, setView }) => {
   const navItems = [
-    { id: 'dashboard', label: 'Patient Overview', icon: LayoutDashboard },
-    { id: 'input-rx', label: 'Analyze Prescription', icon: FileSearch },
-    { id: 'history', label: 'Safety History', icon: History },
-    { id: 'patients', label: 'Patient Directory', icon: Users },
-  ];
-
-  const secondaryNav = [
-    { id: 'sources', label: 'Data Sources', icon: Database },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'dashboard', label: 'Home', icon: House },
+    { id: 'input-rx', label: 'Scan Prescription', icon: ScanLine },
+    { id: 'history', label: 'My Safety Checks', icon: History },
+    { id: 'how-it-works', label: 'How It Works', icon: CircleHelp },
+    { id: 'talk-ai', label: 'Talk to AI', icon: MessageCircle },
   ];
 
   return (
-    <div className="w-64 bg-white border-r border-[#DCE5DF] flex flex-col h-screen sticky top-0 shrink-0 hidden md:flex z-30">
-      <div className="p-6 h-20 flex items-center border-b border-[#DCE5DF]">
+    <aside className="fixed bottom-0 left-0 z-30 flex h-[68px] w-full shrink-0 border-t border-[#DCE5DF] bg-white md:sticky md:top-0 md:h-screen md:w-64 md:flex-col md:border-r md:border-t-0 md:bg-[#FCFDFC]">
+      <div className="hidden h-20 items-center border-b border-[#DCE5DF] px-6 md:flex">
         <Logo />
       </div>
 
-      <div className="flex-1 py-6 px-4 flex flex-col gap-1 overflow-y-auto">
-        <div className="text-xs font-semibold text-[#66736B] uppercase tracking-wider mb-2 px-2">Clinical</div>
-        {navItems.map(item => {
-          const active = currentView === item.id || 
-            (item.id === 'input-rx' && ['extract-rx', 'analysis'].includes(currentView));
-          return (
-            <button
-              key={item.id}
-              onClick={() => setView(item.id)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left
-                ${active ? 'bg-[#E8F5EF] text-[#064E3B]' : 'text-[#66736B] hover:bg-gray-50 hover:text-[#17211B]'}`}
-            >
-              <item.icon size={18} className={active ? 'text-[#087F5B]' : 'text-[#66736B]'} />
-              {item.label}
-            </button>
-          );
-        })}
+      <div className="flex flex-1 items-center justify-around px-1 md:block md:overflow-y-auto md:px-4 md:py-7">
+        <p className="mb-3 hidden px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#87958C] md:block">
+          Your space
+        </p>
 
-        <div className="mt-8 mb-2 px-2 border-t border-[#DCE5DF] pt-6">
-          <div className="text-xs font-semibold text-[#66736B] uppercase tracking-wider mb-2">System</div>
-        </div>
-        {secondaryNav.map(item => (
-           <button
-             key={item.id}
-             onClick={() => setView(item.id)}
-             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full text-left
-               ${currentView === item.id ? 'bg-[#E8F5EF] text-[#064E3B]' : 'text-[#66736B] hover:bg-gray-50 hover:text-[#17211B]'}`}
-           >
-             <item.icon size={18} className={currentView === item.id ? 'text-[#087F5B]' : 'text-[#66736B]'} />
-             {item.label}
-           </button>
-         ))}
+        <nav className="flex w-full items-center justify-around gap-1 md:block md:space-y-1" aria-label="Main navigation">
+          {navItems.map(({ id, label, icon: Icon }) => {
+            const active = currentView === id || (id === 'input-rx' && ['extract-rx', 'analysis'].includes(currentView));
+
+            return (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-2 py-2 text-center text-[10px] transition-colors md:w-full md:flex-row md:gap-3 md:px-3 md:py-3 md:text-left md:text-sm ${
+                  active
+                    ? 'bg-[#E8F5EF] font-semibold text-[#064E3B]'
+                    : 'text-[#66736B] hover:bg-[#F2F6F3] hover:text-[#17211B]'
+                }`}
+              >
+                <Icon size={18} className={active ? 'text-[#087F5B]' : ''} />
+                <span className="truncate">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <div className="p-4 border-t border-[#DCE5DF]">
-        <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 shrink-0">
-            <UserCircle size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#17211B] truncate">Dr. Sarah Jenkins</p>
-            <p className="text-xs text-[#66736B] truncate">Internal Medicine</p>
-          </div>
+      <div className="mx-4 mb-5 hidden rounded-2xl bg-[#F1F6F2] p-4 md:block">
+        <div className="mb-2 flex items-center gap-2 text-[#087F5B]">
+          <HeartPulse size={16} />
+          <span className="text-xs font-semibold">My health profile</span>
         </div>
+        <p className="text-xs leading-relaxed text-[#66736B]">
+          Your existing medications, allergies and diagnoses are used only when the safety check needs them.
+        </p>
       </div>
-    </div>
+    </aside>
   );
 };
-
 
 export default Sidebar;

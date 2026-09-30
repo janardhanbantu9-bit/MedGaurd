@@ -1,18 +1,28 @@
 // @ts-nocheck
 import React from 'react';
-import { Database, AlertTriangle, AlertCircle, CheckCircle2, Pill, ChevronRight } from 'lucide-react';
+import { Database, AlertTriangle, AlertCircle, ChevronRight } from 'lucide-react';
 import { Badge, Button, Card } from '../components/ui';
-import { demoFindings } from '../data/mockData';
 
-const AnalysisScreen = ({ setSelectedFinding }) => {
-  const highRiskCount = demoFindings.filter(f => f.severity === 'high').length;
-  const reviewCount = demoFindings.filter(f => f.severity === 'review').length;
-  const safeCount = demoFindings.filter(f => f.severity === 'safe').length;
+const AnalysisScreen = ({ analysis, setSelectedFinding, setView }) => {
+  if (!analysis) {
+    return (
+      <div className="p-8 max-w-3xl mx-auto text-center">
+        <h1 className="text-2xl font-semibold text-[#17211B] mb-2">No analysis yet</h1>
+        <p className="text-[#66736B] mb-6">Review a prescription to see your safety findings here.</p>
+        <Button onClick={() => setView('input-rx')}>Scan a Prescription</Button>
+      </div>
+    );
+  }
+
+  const findings = analysis.findings;
+  const highRiskCount = analysis.summary.high;
+  const reviewCount = analysis.summary.review;
 
   return (
     <div className="p-8 max-w-5xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
       <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-[#17211B] mb-3 tracking-tight">Medication Safety Analysis</h1>
+        <h1 className="text-3xl font-semibold text-[#17211B] mb-3 tracking-tight">Your safety check</h1>
+        {analysis.persistence?.saved === false && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{analysis.persistence.reason}</p>}
 
         {/* Summary Metrics */}
         <div className="flex gap-4 mt-6">
@@ -21,7 +31,7 @@ const AnalysisScreen = ({ setSelectedFinding }) => {
               <Database className="text-gray-400" size={20}/>
             </div>
             <div>
-              <div className="text-2xl font-semibold text-[#17211B]">6</div>
+              <div className="text-2xl font-semibold text-[#17211B]">{analysis.checksPerformed}</div>
               <div className="text-xs text-[#66736B] uppercase tracking-wider font-medium">Checks Performed</div>
             </div>
           </div>
@@ -48,6 +58,14 @@ const AnalysisScreen = ({ setSelectedFinding }) => {
             </div>
           </div>
         </div>
+
+        {analysis.warnings?.length > 0 && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <ul className="list-disc pl-5 space-y-1">
+              {analysis.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -55,7 +73,7 @@ const AnalysisScreen = ({ setSelectedFinding }) => {
           Detailed Findings
         </h2>
 
-        {demoFindings.map(finding => {
+        {findings.map(finding => {
           const isHigh = finding.severity === 'high';
           const isReview = finding.severity === 'review';
           const isSafe = finding.severity === 'safe';

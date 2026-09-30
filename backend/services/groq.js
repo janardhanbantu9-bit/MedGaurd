@@ -1,47 +1,107 @@
 import Groq from 'groq-sdk';
+import { z } from 'zod';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
-export async function extractPrescription(text) {
+let client = null;
+function getClient() {
   if (!process.env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured');
+    throw new Error('GROQ_API_KEY is not configured. Add it to your .env file (local) or Vercel env vars.');
   }
+  // Created lazily: `new Groq()` throws at import time if the key is missing,
+  // which used to crash every API route (even /api/health).
+  client ??= new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return client;
+}
 
-  const completion = await groq.chat.completions.create({
-    model: 'openai/gpt-oss-120b',
+function parseJson(content, fallback) {
+  if (!content) return fallback;
+  const cleaned = String(content).replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new Error('The AI model returned invalid JSON');
+  }
+}
+
+const text = z.string().nullish().transform((v) => (v == null ? '' : String(v).trim()));
+
+const extractionSchema = z.object({
+  medications: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        dose: text,
+        frequency: text,
+        route: text,
+        duration: text,
+      })
+    )
+    .default([]),
+});
+
+export async function extractPrescription(prescriptionText) {
+  const completion = await getClient().chat.completions.create({
+    model: MODEL,
     temperature: 0,
     response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',
         content:
-          'Extract medications from the prescription text. Return JSON only with a medications array. Each medication must contain name, dose, frequency, route, and duration. Do not infer medications not present in the text.',
+          'Extract medications from the prescription text. Return JSON only in the form {"medications":[{"name":"","dose":"","frequency":"","route":"","duration":""}]}. ' +
+          'Use the generic or brand name exactly as written, and use an empty string for any field that is not stated. Do not infer medications that are not present in the text.',
       },
-      { role: 'user', content: text },
+      { role: 'user', content: prescriptionText },
     ],
   });
 
-  return JSON.parse(completion.choices?.[0]?.message?.content || '{"medications":[]}');
+  const raw = parseJson(completion.choices?.[0]?.message?.content, { medications: [] });
+  const parsed = extractionSchema.safeParse(raw);
+  if (!parsed.success) throw new Error('The AI model returned an unexpected medication format');
+  return parsed.data;
 }
 
-export async function explainFindings(context) {
-  if (!process.env.GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY is not configured');
-  }
+const explanationSchema = z.object({
+  explanations: z
+    .array(
+      z.object({
+        id: z.string(),
+        mechanism: text,
+        clinicalConsiderations: text,
+      })
+    )
+    .default([]),
+});
 
-  const completion = await groq.chat.completions.create({
-    model: 'openai/gpt-oss-120b',
+export async function explainFindings(context) {
+  const completion = await getClient().chat.completions.create({
+    model: MODEL,
     temperature: 0.2,
     response_format: { type: 'json_object' },
     messages: [
       {
         role: 'system',
         content:
-          'Explain provided clinical safety findings clearly and cautiously. Do not create new findings, diagnoses, or treatment instructions. Return JSON with explanations only. Final decisions remain with a qualified healthcare professional.',
+          'You explain medication safety findings to clinicians clearly and cautiously. Use ONLY the findings and evidence excerpts provided. ' +
+          'Do not create new findings, diagnoses, doses, or treatment instructions. ' +
+          'Return JSON in the form {"explanations":[{"id":"<finding id>","mechanism":"1-2 sentences on why the conflict matters, grounded in the evidence","clinicalConsiderations":"1-2 sentences on what a clinician may want to review"}]}. ' +
+          'Final decisions remain with a qualified healthcare professional.',
       },
       { role: 'user', content: JSON.stringify(context) },
     ],
   });
 
-  return JSON.parse(completion.choices?.[0]?.message?.content || '{"explanations":[]}');
+  const raw = parseJson(completion.choices?.[0]?.message?.content, { explanations: [] });
+  const parsed = explanationSchema.safeParse(raw);
+  return parsed.success ? parsed.data : { explanations: [] };
 }
