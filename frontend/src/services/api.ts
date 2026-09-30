@@ -29,30 +29,54 @@ async function authHeaders() {
 }
 
 async function post<T>(path: string, payload: unknown): Promise<T> {
+  const auth = await authHeaders();
+
   let response: Response;
+
   try {
     response = await fetch(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth,
+      },
       body: JSON.stringify(payload),
     });
-  } catch {
-    throw new Error('Could not reach the server. Check your connection and try again.');
+  } catch (error) {
+    console.error(`POST ${path} failed:`, error);
+    throw new Error(`Could not reach ${path}. Check that the API server is running.`);
   }
+
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `Request failed (${response.status})`);
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed (${response.status})`);
+  }
+
   return data as T;
 }
 
 async function get<T>(path: string): Promise<T> {
+  const auth = await authHeaders();
+
   let response: Response;
+
   try {
-    response = await fetch(path, { headers: await authHeaders() });
-  } catch {
-    throw new Error('Could not reach the server. Check your connection and try again.');
+    response = await fetch(path, {
+      method: 'GET',
+      headers: auth,
+    });
+  } catch (error) {
+    console.error(`GET ${path} failed:`, error);
+    throw new Error(`Could not reach ${path}. Check that the API server is running.`);
   }
+
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `Request failed (${response.status})`);
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed (${response.status})`);
+  }
+
   return data as T;
 }
 

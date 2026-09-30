@@ -58,5 +58,6 @@ function devApi(): Plugin {
 }
 
 export default defineConfig({
+  envDir: rootDir,
   plugins: [react(), devApi()],
 });
