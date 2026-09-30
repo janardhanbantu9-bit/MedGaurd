@@ -6,7 +6,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await analyzePrescription(req.body || {});
+    const body = req.body || {};
+    const result = await analyzePrescription({
+      patientId: body.patientId,
+      prescription: body.prescription,
+    });
+
     return res.status(200).json(result);
   } catch (error) {
     console.error('MediGuard analysis error:', error);

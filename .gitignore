@@ -3,19 +3,23 @@ node_modules/
 frontend/node_modules/
 
 # Build output
-frontend/dist/
 dist/
+frontend/dist/
 
-# Local env / secrets
+# Environment / secrets
 .env
 .env.*
 !.env.example
+
 frontend/.env
 frontend/.env.*
 !frontend/.env.example
 
 # Vercel
 .vercel/
+
+# Supabase local CLI state
+.supabase/
 
 # Logs
 npm-debug.log*
@@ -28,13 +32,3 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
-
-.env
-.env.local
-.env.*.local
-
-node_modules/
-frontend/node_modules/
-frontend/dist/
-
-.vercel/

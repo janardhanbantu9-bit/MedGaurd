@@ -12,6 +12,7 @@
   "dependencies": {
     "groq-sdk": "latest",
     "multer": "latest",
-    "zod": "latest"
+    "zod": "latest",
+    "@supabase/supabase-js": "latest"
   }
 }
