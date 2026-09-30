@@ -20,6 +20,7 @@ function allergenKey(name) {
 }
 
 export async function checkAllergies({ patient, newMeds }) {
+  
   const findings = [];
 
   for (const allergy of patient?.allergies ?? []) {

@@ -1,4 +1,5 @@
 import { AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export type ApiMedication = {
   name: string;
@@ -18,10 +19,35 @@ export type UiMedication = {
   intendedDuration: string;
 };
 
+async function authHeaders() {
+  if (!supabase) throw new Error('Authentication is not configured.');
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  const token = data.session?.access_token;
+  if (!token) throw new Error('Your session has expired. Please sign in again.');
+  return { Authorization: `Bearer ${token}` };
+}
+
 async function post<T>(path: string, payload: unknown): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error('Could not reach the server. Check your connection and try again.');
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || `Request failed (${response.status})`);
+  return data as T;
+}
+
+async function get<T>(path: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, { headers: await authHeaders() });
   } catch {
     throw new Error('Could not reach the server. Check your connection and try again.');
   }
@@ -32,6 +58,10 @@ async function post<T>(path: string, payload: unknown): Promise<T> {
 
 function toUiMedication(m: ApiMedication, i: number): UiMedication {
   return { id: `em${Date.now()}-${i}`, name: m.name, dose: m.dose ?? '', freq: m.frequency ?? '', route: m.route ?? '', intendedDuration: m.duration ?? '' };
+}
+
+export async function ensureProfile(name?: string) {
+  return post('/api/profile', { name: name?.trim() || undefined });
 }
 
 export async function extractMedications(prescription: string): Promise<UiMedication[]> {
@@ -72,19 +102,13 @@ export async function analyzeMedications(patient: unknown, medications: UiMedica
 }
 
 export async function getPatients() {
-  let response: Response;
-  try { response = await fetch('/api/patients'); } catch { throw new Error('Could not reach the server.'); }
-  const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `Could not load patients (${response.status})`);
-  return (data?.patients ?? []) as any[];
+  const data = await get<{ patients: any[] }>('/api/patients');
+  return data?.patients ?? [];
 }
 
 export async function getSafetyHistory(patientId: string) {
   const query = new URLSearchParams({ patientId });
-  let response: Response;
-  try { response = await fetch(`/api/history?${query}`); } catch { throw new Error('Could not reach the server.'); }
-  const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `Could not load safety history (${response.status})`);
+  const data = await get<{ analyses: any[] }>(`/api/history?${query}`);
   return data?.analyses ?? [];
 }
 

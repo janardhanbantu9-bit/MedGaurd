@@ -1,5 +1,7 @@
 import Groq from 'groq-sdk';
 import { fail } from './_http.js';
+import { requireUser } from './_auth.js';
+import { getOwnedPatientContext } from './_patient.js';
 
 const MODEL =
   process.env.GROQ_CHAT_MODEL ||
@@ -26,18 +28,15 @@ function compactContext(patient = {}) {
     age: patient.age ?? null,
     sex: patient.sex ?? null,
     weight: patient.weight ?? null,
-
     allergies: (patient.allergies ?? []).map((a) => ({
       name: a.name,
       severity: a.severity,
       reaction: a.reaction,
     })),
-
     diagnoses: (patient.diagnoses ?? []).map((d) => ({
       name: d.name,
       status: d.status,
     })),
-
     currentMedications: (patient.currentMeds ?? []).map((m) => ({
       name: m.name,
       dose: m.dose,
@@ -82,6 +81,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const user = await requireUser(req, res);
+  if (!user) return;
+
   try {
     const question = String(req.body?.message ?? '').trim();
 
@@ -93,37 +95,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Message is too long' });
     }
 
-    const userContext = compactContext(req.body?.patient);
+    const patient = await getOwnedPatientContext(user.id);
+    const userContext = compactContext(patient || {});
 
     const completion = await getClient().chat.completions.create({
       model: MODEL,
       temperature: 0.2,
       max_tokens: 180,
       messages: [
-        {
-          role: 'system',
-          content: SYSTEM,
-        },
+        { role: 'system', content: SYSTEM },
         {
           role: 'user',
-          content: JSON.stringify({
-            question,
-            userContext,
-          }),
+          content: JSON.stringify({ question, userContext }),
         },
       ],
     });
 
     const answer = completion.choices?.[0]?.message?.content?.trim();
+    if (!answer) throw new Error('The AI returned an empty answer');
 
-    if (!answer) {
-      throw new Error('The AI returned an empty answer');
-    }
-
-    return res.status(200).json({
-      answer,
-      model: MODEL,
-    });
+    return res.status(200).json({ answer, model: MODEL });
   } catch (error) {
     console.error('MediGuard chat error:', error);
     return fail(res, error, 'AI help unavailable');
