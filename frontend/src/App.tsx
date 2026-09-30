@@ -15,7 +15,8 @@ const App = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [patients, setPatients] = useState([]);
-  const [analysisResult, setAnalysisResult] = useState(null);
+  const [extractedMeds, setExtractedMeds] = useState([]);
+  const [analysis, setAnalysis] = useState(null);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [patientError, setPatientError] = useState('');
 
@@ -46,17 +47,19 @@ const App = () => {
       case 'dashboard':
         return <DashboardScreen patient={activePatient} setView={setCurrentView} />;
       case 'input-rx':
+        return <InputRxScreen setView={setCurrentView} setExtractedMeds={setExtractedMeds} />;
+      case 'extract-rx':
         return (
-          <InputRxScreen
-            patient={activePatient}
+          <ExtractedRxScreen
             setView={setCurrentView}
-            onAnalysisComplete={setAnalysisResult}
+            patient={activePatient}
+            meds={extractedMeds}
+            setMeds={setExtractedMeds}
+            setAnalysis={setAnalysis}
           />
         );
-      case 'extract-rx':
-        return <ExtractedRxScreen analysisResult={analysisResult} setView={setCurrentView} />;
       case 'analysis':
-        return <AnalysisScreen analysisResult={analysisResult} setSelectedFinding={setSelectedFinding} />;
+        return <AnalysisScreen analysis={analysis} setSelectedFinding={setSelectedFinding} setView={setCurrentView} />;
       case 'sources':
         return <PlaceholderScreen title="Data Sources" setView={setCurrentView} />;
       case 'settings':

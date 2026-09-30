@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../backend/services/supabase.js';
+import { getSupabase } from '../backend/services/supabase.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,6 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const supabaseAdmin = getSupabase();
     const { data: patients, error } = await supabaseAdmin
       .from('patients')
       .select('*')

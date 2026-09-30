@@ -80,3 +80,15 @@ export async function analyzeMedications(patient: unknown, medications: UiMedica
   });
   return { ...data, findings: (data.findings ?? []).map(toUiFinding) };
 }
+
+export async function getPatients() {
+  let response: Response;
+  try {
+    response = await fetch('/api/patients');
+  } catch {
+    throw new Error('Could not reach the server.');
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || `Could not load patients (${response.status})`);
+  return (data?.patients ?? []) as any[];
+}
