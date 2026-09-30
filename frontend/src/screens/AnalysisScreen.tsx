@@ -8,8 +8,8 @@ const AnalysisScreen = ({ analysis, setSelectedFinding, setView }) => {
     return (
       <div className="p-8 max-w-3xl mx-auto text-center">
         <h1 className="text-2xl font-semibold text-[#17211B] mb-2">No analysis yet</h1>
-        <p className="text-[#66736B] mb-6">Enter a prescription and run the safety analysis to see findings here.</p>
-        <Button onClick={() => setView('input-rx')}>Input New Prescription</Button>
+        <p className="text-[#66736B] mb-6">Review a prescription to see your safety findings here.</p>
+        <Button onClick={() => setView('input-rx')}>Scan a Prescription</Button>
       </div>
     );
   }
@@ -21,7 +21,8 @@ const AnalysisScreen = ({ analysis, setSelectedFinding, setView }) => {
   return (
     <div className="p-8 max-w-5xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
       <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-[#17211B] mb-3 tracking-tight">Medication Safety Analysis</h1>
+        <h1 className="text-3xl font-semibold text-[#17211B] mb-3 tracking-tight">Your safety check</h1>
+        {analysis.persistence?.saved === false && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{analysis.persistence.reason}</p>}
 
         {/* Summary Metrics */}
         <div className="flex gap-4 mt-6">

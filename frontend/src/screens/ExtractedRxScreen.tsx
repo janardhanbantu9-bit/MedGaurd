@@ -136,7 +136,7 @@ const ExtractedRxScreen = ({ setView, patient, meds, setMeds, setAnalysis }) => 
           <div>
             <h3 className="font-semibold text-[#17211B] mb-1">Ready for Safety Analysis</h3>
             <p className="text-sm text-[#66736B] leading-relaxed">
-              Mediguard will compare these <span className="font-semibold text-[#17211B]">{meds.length} new medications</span> against the patient's existing active medications, known allergies, and active diagnoses.
+              MediGuard will compare these <span className="font-semibold text-[#17211B]">{meds.length} medications</span> with your current medications, allergies and health context.
             </p>
           </div>
         </div>

@@ -75,7 +75,7 @@ const FindingDetailPanel = ({ finding, onClose }) => {
 
              <section className="bg-blue-50/50 border border-blue-100 rounded-xl p-5">
                <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Info size={16} /> Clinical Considerations
+                  <Info size={16} /> What to consider
                </h3>
                <p className="text-blue-800 text-sm leading-relaxed">{finding.clinicalConsiderations}</p>
              </section>
@@ -114,7 +114,7 @@ const FindingDetailPanel = ({ finding, onClose }) => {
         {/* Footer */}
         <div className="p-6 border-t border-[#DCE5DF] bg-gray-50 flex justify-between items-center shrink-0">
            <p className="text-xs text-[#66736B] max-w-sm">
-             Clinical decision support. Final decisions remain with a qualified healthcare professional.
+             Use these source notes to guide a conversation with your pharmacist or healthcare professional.
            </p>
            <Button variant="outline" onClick={onClose}>Close Detail</Button>
         </div>

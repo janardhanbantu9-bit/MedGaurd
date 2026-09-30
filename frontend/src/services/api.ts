@@ -50,6 +50,26 @@ export async function extractMedications(prescription: string): Promise<UiMedica
   }));
 }
 
+export async function extractMedicationImage(file: File): Promise<UiMedication[]> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose a prescription image file.');
+  if (file.size > 4 * 1024 * 1024) throw new Error('Choose an image smaller than 4 MB.');
+  const image = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read image'));
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.readAsDataURL(file);
+  });
+  const data = await post<{ medications: ApiMedication[] }>('/api/vision-extract', { image });
+  return data.medications.map((m, i) => ({
+    id: `em${Date.now()}-${i}`,
+    name: m.name,
+    dose: m.dose ?? '',
+    freq: m.frequency ?? '',
+    route: m.route ?? '',
+    intendedDuration: m.duration ?? '',
+  }));
+}
+
 const SEVERITY_UI = {
   high: { status: 'High Risk', icon: AlertTriangle },
   review: { status: 'Needs Review', icon: AlertCircle },
@@ -91,4 +111,17 @@ export async function getPatients() {
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(data?.error || `Could not load patients (${response.status})`);
   return (data?.patients ?? []) as any[];
+}
+
+export async function getSafetyHistory(patientId: string) {
+  const query = new URLSearchParams({ patientId });
+  let response: Response;
+  try {
+    response = await fetch(`/api/history?${query}`);
+  } catch {
+    throw new Error('Could not reach the server.');
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error || `Could not load safety history (${response.status})`);
+  return data?.analyses ?? [];
 }
