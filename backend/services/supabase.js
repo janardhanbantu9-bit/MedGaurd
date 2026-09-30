@@ -7,7 +7,7 @@ export function getSupabase() {
   if (client) return client;
 
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) throw new Error('SUPABASE_URL is not configured');
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
 

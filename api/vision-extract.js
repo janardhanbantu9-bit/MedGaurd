@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 import { extractMedications } from '../backend/pipeline/analyzePrescription.js';
 import { fail } from './_http.js';
+import { requireUser } from './_auth.js';
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const VISION_MODEL = 'qwen/qwen3.8-27b';
@@ -28,6 +29,10 @@ function parseVisionJson(content) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const user = await requireUser(req, res);
+  if (!user) return;
+
   try {
     const image = decodeImage(req.body?.image);
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');

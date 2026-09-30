@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { House, ScanLine, History, CircleHelp, MessageCircle, HeartPulse } from 'lucide-react';
+import { House, ScanLine, History, CircleHelp, MessageCircle } from 'lucide-react';
 import { Logo } from './ui';
 
 const Sidebar = ({ currentView, setView }) => {
@@ -43,16 +43,6 @@ const Sidebar = ({ currentView, setView }) => {
             );
           })}
         </nav>
-      </div>
-
-      <div className="mx-4 mb-5 hidden rounded-2xl bg-[#F1F6F2] p-4 md:block">
-        <div className="mb-2 flex items-center gap-2 text-[#087F5B]">
-          <HeartPulse size={16} />
-          <span className="text-xs font-semibold">My health profile</span>
-        </div>
-        <p className="text-xs leading-relaxed text-[#66736B]">
-          Your existing medications, allergies and diagnoses are used only when the safety check needs them.
-        </p>
       </div>
     </aside>
   );
