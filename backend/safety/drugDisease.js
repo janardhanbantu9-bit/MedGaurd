@@ -1,4 +1,4 @@
-import { findSnippet, sectionText, termRegex } from '../utils/normalize.js';
+import { findSnippet, hasNegatedSafetyLanguage, sectionText, termRegex } from '../utils/normalize.js';
 
 // Diagnosis -> words a label would use. Falls back to the diagnosis name itself.
 const DIAGNOSIS_TERMS = [
@@ -21,9 +21,15 @@ function termsFor(name) {
   return cleaned ? [cleaned] : [];
 }
 
-export async function checkDrugDisease({ patient, newMeds }) {
+export async function checkDrugDisease({ patient, newMeds = [] }) {
   const findings = [];
+  if (!newMeds?.length) return { findings, state: 'not_applicable' };
   const diagnoses = (patient?.diagnoses ?? []).filter((d) => !d.status || /active/i.test(d.status));
+  if (diagnoses.length === 0) return { findings, state: 'passed' };
+
+  // Label text is the evidence source. A missing label means disease conflicts
+  // for that medication could not be checked.
+  let state = newMeds.some((med) => !med?.label) ? 'unable_to_check' : 'passed';
 
   for (const med of newMeds) {
     if (!med.label) continue;
@@ -40,21 +46,24 @@ export async function checkDrugDisease({ patient, newMeds }) {
       const contra = findSnippet(contraindications, terms);
       const warn = contra ? null : findSnippet(warnings, terms);
       if (!contra && !warn) continue;
+      const definiteContraindication = Boolean(contra) && !hasNegatedSafetyLanguage(contra);
 
       findings.push({
         category: 'Drug–Disease Conflict',
-        severity: contra ? 'high' : 'review',
+        severity: definiteContraindication ? 'high' : 'review',
         title: `${med.name} and ${dx.name}`,
-        summary: contra
+        summary: definiteContraindication
           ? `The FDA label lists a contraindication that mentions ${dx.name}, which is an active diagnosis for this patient.`
+          : contra
+            ? `The FDA contraindications text mentions ${dx.name}, but its wording is negated or otherwise not a definite contraindication. Review the cited text.`
           : `The FDA label carries a warning that mentions ${dx.name}, which is an active diagnosis for this patient.`,
         affectedMeds: [`${med.name} (New)`],
         patientContext: [`${dx.name} (Active Diagnosis)`],
         evidenceSource: `openFDA drug label – ${contra ? 'Contraindications' : 'Warnings'} section`,
         evidence: [{ source: `${med.name} FDA label (${contra ? 'Contraindications' : 'Warnings'})`, snippet: contra ?? warn }],
-        action: contra ? 'Clinician review required before dispensing.' : 'Review the label warning and monitor as appropriate.',
+        action: definiteContraindication ? 'Clinician review required before dispensing.' : 'Review the label wording and monitor as appropriate.',
       });
     }
   }
-  return findings;
+  return { findings, state };
 }
