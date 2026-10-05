@@ -10,8 +10,9 @@ import FindingDetailPanel from './screens/FindingDetailPanel';
 import HistoryScreen from './screens/HistoryScreen';
 import TalkToAIScreen from './screens/TalkToAIScreen';
 import LoginScreen from './screens/LoginScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
 import { supabase } from './lib/supabase';
-import { ensureProfile, getPatients } from './services/api';
+import { getProfile, saveOnboardingProfile } from './services/api';
 import { BookOpenCheck, BrainCircuit, Database, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 
 function HowItWorksScreen() {
@@ -84,11 +85,8 @@ const App = () => {
     setPatientError('');
 
     try {
-      const name = String(user?.user_metadata?.full_name ?? '').trim();
-      await ensureProfile(name);
-      const items = await getPatients();
-      setPatients(items);
-      if (!items.length) throw new Error('Your account is signed in, but no health profile was returned.');
+      const profile = await getProfile();
+      setPatients(profile ? [profile] : []);
     } catch (error) {
       console.error('MediGuard profile bootstrap failed:', error);
       setPatients([]);
@@ -147,6 +145,13 @@ const App = () => {
     clearAppState();
   };
 
+  const handleOnboardingComplete = async (payload) => {
+    const profile = await saveOnboardingProfile(payload);
+    setPatients([profile]);
+    setPatientError('');
+    setCurrentView('dashboard');
+  };
+
   const retryProfile = () => {
     if (authUser) void loadUserContext(authUser);
   };
@@ -171,7 +176,13 @@ const App = () => {
 
   const renderContent = () => {
     if (loadingPatients) return <div className="p-8 text-sm text-[#66736B]">Loading your health context…</div>;
-    if (!activePatient) return <ProfileUnavailable message={patientError || 'Your health profile is not available yet.'} onRetry={retryProfile} onSignOut={handleSignedOut} />;
+    if (!activePatient) {
+      if (patientError) return <ProfileUnavailable message={patientError} onRetry={retryProfile} onSignOut={handleSignedOut} />;
+      return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+    }
+    if (!activePatient.onboarding_completed && !activePatient.onboardingCompleted) {
+      return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+    }
 
     switch (currentView) {
       case 'dashboard': return <DashboardScreen patient={activePatient} setView={setView} />;

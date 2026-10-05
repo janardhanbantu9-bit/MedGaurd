@@ -91,11 +91,32 @@ function toUiMedication(m: ApiMedication, i: number): UiMedication {
   };
 }
 
-export async function ensureProfile(name?: string) {
-  const data = await post<{ patient: any; created: boolean }>('/api/profile', {
-    name: name?.trim() || undefined,
-  });
-  return data.patient;
+export type OnboardingPayload = {
+  age: number | string;
+  weight: number | string;
+  height: number | string;
+  medications: { name: string; dose?: string; frequency?: string; route?: string }[] | string[];
+  currentConditions: (string | { name: string })[];
+  previousConditions: (string | { name: string })[];
+  allergies: { name: string; severity?: string; reaction?: string }[] | string[];
+};
+
+export async function getProfile() {
+  try {
+    const data = await get<{ profile?: any }>('/api/profile');
+    return data?.profile ?? null;
+  } catch (error) {
+    if (error instanceof Error && /404|no profile|not found/i.test(error.message)) return null;
+    throw error;
+  }
+}
+
+export async function saveOnboardingProfile(payload: OnboardingPayload) {
+  const data = await post<{ profile: any; created?: boolean; duplicate?: boolean }>(
+    '/api/profile',
+    payload
+  );
+  return data.profile;
 }
 
 export async function extractMedications(prescription: string): Promise<UiMedication[]> {
