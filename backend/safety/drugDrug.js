@@ -1,4 +1,4 @@
-import { findSnippet, sectionText, termRegex } from '../utils/normalize.js';
+import { findSnippet, hasDefinitiveSafetyLanguage, sectionText } from '../utils/normalize.js';
 
 // Class-level wording that labels use ("NSAIDs", "anticoagulants") keyed by ATC prefix.
 const CLASS_TERMS = [
@@ -11,8 +11,6 @@ const CLASS_TERMS = [
   ['N06A', ['antidepressant', 'SSRI']],
   ['A10', ['antidiabetic', 'hypoglycemic']],
 ];
-
-const SEVERE = /contraindicat|avoid|serious|fatal|life-threatening|severe|major|bleed|hemorrhag|not recommended|toxicity/i;
 
 function classTerms(med) {
   const atc = (med.classes ?? []).filter((c) => c.classType?.startsWith('ATC')).map((c) => c.classId);
@@ -33,8 +31,15 @@ function labelMentions(source, target) {
   return null;
 }
 
-export async function checkDrugDrug({ newMeds, currentMeds }) {
+export async function checkDrugDrug({ newMeds = [], currentMeds = [] }) {
   const findings = [];
+
+  if (!newMeds?.length) return { findings, state: 'not_applicable' };
+
+  // Label text is the evidence source. A missing label means the pairs involving
+  // that medication could not be checked.
+  const missingLabel = [...(newMeds ?? []), ...(currentMeds ?? [])].some((med) => !med?.label);
+  let state = missingLabel ? 'unable_to_check' : 'passed';
 
   newMeds.forEach((med, i) => {
     const others = [
@@ -43,13 +48,16 @@ export async function checkDrugDrug({ newMeds, currentMeds }) {
     ];
 
     for (const { med: other, tag } of others) {
+      if (!med.label || !other.label) continue;
       const hits = [
         { from: med, to: other, hit: labelMentions(med, other) },
         { from: other, to: med, hit: labelMentions(other, med) },
       ].filter((h) => h.hit);
       if (hits.length === 0) continue;
 
-      const severe = hits.some((h) => SEVERE.test(h.hit.snippet));
+      // A class mention or generic warning cannot establish a definite interaction.
+      // Escalate only direct medication evidence with non-negated, definitive wording.
+      const severe = hits.some((h) => h.hit.level === 'drug' && hasDefinitiveSafetyLanguage(h.hit.snippet));
       const classOnly = hits.every((h) => h.hit.level === 'class');
 
       findings.push({
@@ -70,5 +78,5 @@ export async function checkDrugDrug({ newMeds, currentMeds }) {
     }
   });
 
-  return findings;
+  return { findings, state };
 }
