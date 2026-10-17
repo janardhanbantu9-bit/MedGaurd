@@ -103,25 +103,53 @@ const App = () => {
     }
 
     let mounted = true;
+    let authResolved = false;
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
-      if (error) {
-        console.error('Initial Supabase session lookup failed:', error);
-        setPatientError(`Authentication session error: ${error.message}`);
-        setAuthLoading(false);
-        return;
-      }
-      if (data.session?.user) {
-        void loadUserContext(data.session.user);
-      } else {
-        setAuthUser(null);
+    // Prevent the app from displaying the startup loader forever if session
+    // initialization stalls. If auth resolves later, the listener can still update state.
+    const authTimeout = window.setTimeout(() => {
+      if (mounted && !authResolved) {
+        authResolved = true;
+        console.error('MediGuard auth initialization timed out. Check Supabase configuration/network.');
+        setPatientError('Authentication is taking too long. Check your connection and Supabase configuration, then try refreshing.');
         setAuthLoading(false);
       }
-    });
+    }, 10000);
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        authResolved = true;
+        if (error) {
+          console.error('Initial Supabase session lookup failed:', error);
+          setPatientError(`Authentication session error: ${error.message}`);
+          setAuthLoading(false);
+          return;
+        }
+        if (data.session?.user) {
+          setAuthLoading(false);
+          void loadUserContext(data.session.user);
+        } else {
+          setAuthUser(null);
+          setAuthLoading(false);
+        }
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        authResolved = true;
+        console.error('Initial Supabase session lookup rejected:', error);
+        setPatientError(error?.message || 'Could not check your sign-in session.');
+        setAuthLoading(false);
+      })
+      .finally(() => {
+        window.clearTimeout(authTimeout);
+        if (mounted) setAuthLoading(false);
+      });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
+      authResolved = true;
+      window.clearTimeout(authTimeout);
       if (event === 'SIGNED_OUT') {
         setAuthUser(null);
         clearAppState();
@@ -136,6 +164,7 @@ const App = () => {
 
     return () => {
       mounted = false;
+      window.clearTimeout(authTimeout);
       subscription.subscription.unsubscribe();
     };
   }, [clearAppState, loadUserContext]);
