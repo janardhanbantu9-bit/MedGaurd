@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { House, ScanLine, History, CircleHelp, MessageCircle } from 'lucide-react';
+import { House, ScanLine, History, MessageCircle } from 'lucide-react';
 import { Logo } from './ui';
 
 const Sidebar = ({ currentView, setView }) => {
@@ -8,7 +8,6 @@ const Sidebar = ({ currentView, setView }) => {
     { id: 'dashboard', label: 'Home', icon: House },
     { id: 'input-rx', label: 'Scan Prescription', icon: ScanLine },
     { id: 'history', label: 'My Safety Checks', icon: History },
-    { id: 'how-it-works', label: 'How It Works', icon: CircleHelp },
     { id: 'talk-ai', label: 'Talk to AI', icon: MessageCircle },
   ];
 

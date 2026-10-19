@@ -106,11 +106,16 @@ export async function getProfile() {
     const data = await get<{ profile?: any }>('/api/profile');
     return data?.profile ?? null;
   } catch (error) {
-    if (error instanceof Error && /404|no profile|not found/i.test(error.message)) return null;
+    if (
+      error instanceof Error &&
+      /404|no health profile found|no profile|not found/i.test(error.message)
+    ) {
+      return null;
+    }
+
     throw error;
   }
 }
-
 export async function saveOnboardingProfile(payload: OnboardingPayload) {
   const data = await post<{ profile: any; created?: boolean; duplicate?: boolean }>(
     '/api/profile',
@@ -185,3 +190,4 @@ export async function chatWithAI(message: string, patient: unknown) {
   const data = await post<{ answer: string }>('/api/chat', { message, patient });
   return data.answer;
 }
+

@@ -13,33 +13,7 @@ import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import { supabase } from './lib/supabase';
 import { getProfile, saveOnboardingProfile } from './services/api';
-import { BookOpenCheck, BrainCircuit, Database, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
-
-function HowItWorksScreen() {
-  const sources = [
-    { title: 'RxNorm', detail: 'Matches medication names to standardized drug concepts and active ingredients.', icon: BookOpenCheck },
-    { title: 'RxClass', detail: 'Adds recognized therapeutic class information to support class-level comparisons.', icon: Database },
-    { title: 'openFDA', detail: 'Looks up official drug labeling, including warnings, interactions and dosage sections.', icon: ShieldCheck },
-    { title: 'Deterministic safety checks', detail: 'Applies transparent checks to allergies, medication overlaps, conditions and available dose limits.', icon: ShieldCheck },
-    { title: 'AI explanation', detail: 'Turns source-backed findings into plain language. It does not make the final safety decision.', icon: BrainCircuit },
-  ];
-
-  return (
-    <section className="mx-auto max-w-5xl px-6 py-10 md:px-10 md:py-14">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#087F5B]">Behind the check</p>
-      <h1 className="font-serif text-4xl tracking-tight text-[#17211B] md:text-5xl">How it works</h1>
-      <p className="mt-3 max-w-2xl leading-7 text-[#66736B]">MediGuard brings together established drug references and consistent checks to help you review a prescription with more context.</p>
-      <div className="mt-9 divide-y divide-[#E5ECE7] rounded-3xl border border-[#DCE5DF] bg-white px-6 md:px-8">
-        {sources.map(({ title, detail, icon: Icon }, index) => (
-          <article key={title} className="flex gap-4 py-6">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8F5EF] text-[#087F5B]"><Icon size={19} /></span>
-            <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#94A198]">Step {index + 1}</p><h2 className="mt-1 font-serif text-xl text-[#173A2C]">{title}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#66736B]">{detail}</p></div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
+import {  LogOut, RefreshCw } from 'lucide-react';
 
 function ProfileUnavailable({ message, onRetry, onSignOut }) {
   return (
@@ -156,10 +130,18 @@ const App = () => {
         setAuthLoading(false);
         return;
       }
-      if (session?.user) {
-        setAuthLoading(false);
-        void loadUserContext(session.user);
-      }
+      if (event === 'TOKEN_REFRESHED') {
+  if (session?.user) {
+    setAuthUser(session.user);
+  }
+  setAuthLoading(false);
+  return;
+}
+
+if (session?.user) {
+  setAuthLoading(false);
+  void loadUserContext(session.user);
+}
     });
 
     return () => {
@@ -219,7 +201,7 @@ const App = () => {
       case 'extract-rx': return <ExtractedRxScreen setView={setCurrentView} patient={activePatient} meds={extractedMeds} setMeds={setExtractedMeds} setAnalysis={setAnalysis} />;
       case 'analysis': return <AnalysisScreen analysis={analysis} setSelectedFinding={setSelectedFinding} setView={setView} />;
       case 'history': return <HistoryScreen patientId={activePatient.id} setView={setView} />;
-      case 'how-it-works': return <HowItWorksScreen />;
+      
       case 'talk-ai': return <TalkToAIScreen patient={activePatient} setView={setView} />;
       default: return <DashboardScreen patient={activePatient} setView={setView} />;
     }
