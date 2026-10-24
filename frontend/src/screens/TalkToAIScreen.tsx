@@ -1,25 +1,24 @@
-// @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bot, Loader2, MessageCircle, Send, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
+import { ArrowRight, Bot, Loader2, Send, ShieldCheck, UserRound } from 'lucide-react';
 import { chatWithAI } from '../services/api';
 
 const starterMessage = {
   role: 'assistant',
   content:
-    'I can help with general medication information. For personalized interaction, allergy, duplicate-therapy, disease-conflict, or dose-risk questions, use Safety Check so MediGuard can run the evidence-backed checks first.',
+    'I can help answer general questions about medications, side effects, and how medicines are usually taken. For personalized checks (allergies, interactions, duplicate drugs, or doses), use the Scan Prescription check.',
 };
 
 const quickQuestions = [
   'What is this medication usually used for?',
-  'What are common side effects of this medicine?',
-  'What should I know about taking this medication with food?',
+  'What are common side effects?',
+  'Should this medication be taken with food?',
 ];
 
-export default function TalkToAIScreen({ patient, setView }) {
-  const [messages, setMessages] = useState([starterMessage]);
+export default function TalkToAIScreen({ patient, setView }: any) {
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([starterMessage]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const endRef = useRef(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,18 +29,20 @@ export default function TalkToAIScreen({ patient, setView }) {
     if (!question || busy) return;
 
     setInput('');
-    setMessages((items) => [...items, { role: 'user', content: question }]);
+    const updatedMessages = [...messages, { role: 'user', content: question }];
+    setMessages(updatedMessages);
     setBusy(true);
 
     try {
-      const answer = await chatWithAI(question, patient);
+      // Pass full conversation history so follow-up questions retain context
+      const answer = await chatWithAI(question, patient, updatedMessages);
       setMessages((items) => [...items, { role: 'assistant', content: answer }]);
     } catch (error) {
       setMessages((items) => [
         ...items,
         {
           role: 'assistant',
-          content: error?.message || 'I could not reach the AI help service right now.',
+          content: error instanceof Error ? error.message : 'I could not reach the AI help service right now.',
         },
       ]);
     } finally {
@@ -49,19 +50,22 @@ export default function TalkToAIScreen({ patient, setView }) {
     }
   };
 
-  const useQuestion = (question) => {
-    setInput(question);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void sendMessage();
+    }
   };
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl flex-col px-6 pb-10 pt-10 md:px-10 md:pt-12">
+    <section className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-5xl flex-col px-6 pb-10 pt-10 md:px-10 md:pt-12">
       <div className="mb-7">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#087F5B]">Medication information</p>
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <h1 className="font-serif text-4xl tracking-tight text-[#17211B] md:text-5xl">Talk to AI</h1>
             <p className="mt-3 max-w-2xl leading-7 text-[#66736B]">
-              Ask basic medication questions with relevant profile context. This is an information helper, not the safety engine.
+              Ask medication questions with your profile context. This is an informational helper, not the safety engine.
             </p>
           </div>
           <button
@@ -77,7 +81,7 @@ export default function TalkToAIScreen({ patient, setView }) {
 
       <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#CFE4D7] bg-[#F0F8F5] px-4 py-3 text-sm text-[#36584A]">
         <ShieldCheck size={17} className="shrink-0 text-[#087F5B]" />
-        <span>General medication information only. The safety pipeline remains the source of individualized conflict checks.</span>
+        <span>General medication information only. MediGuard Safety Check remains the source of individualized conflict checks.</span>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-[#E4EDE8] bg-white shadow-sm">
@@ -87,77 +91,82 @@ export default function TalkToAIScreen({ patient, setView }) {
             return (
               <div key={`${message.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex max-w-[88%] items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${isUser ? 'bg-[#087F5B] text-white' : 'bg-[#E8F5EF] text-[#087F5B]'}`}>
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                      isUser ? 'bg-[#087F5B] text-white' : 'bg-[#E8F5EF] text-[#087F5B]'
+                    }`}
+                  >
                     {isUser ? <UserRound size={16} /> : <Bot size={16} />}
                   </span>
-                  <div className={`rounded-2xl px-4 py-3 text-sm leading-6 ${isUser ? 'bg-[#087F5B] text-white' : 'bg-[#F3F7F4] text-[#24372D]'}`}>
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm leading-6 whitespace-pre-wrap ${
+                      isUser ? 'bg-[#087F5B] text-white' : 'bg-[#F3F7F4] text-[#24372D]'
+                    }`}
+                  >
                     {message.content}
                   </div>
                 </div>
               </div>
             );
           })}
-
-          {messages.length === 1 && (
-            <div className="pt-3">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#8B9991]">
-                <Sparkles size={14} className="text-[#087F5B]" /> Try a question
-              </div>
-              <div className="grid gap-2 md:grid-cols-3">
-                {quickQuestions.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    onClick={() => useQuestion(question)}
-                    className="rounded-2xl border border-[#E4EDE8] bg-[#FAFCFB] px-4 py-3 text-left text-sm leading-5 text-[#4F6258] transition-colors hover:border-[#BFD7C8] hover:bg-[#F0F8F5]"
-                  >
-                    <MessageCircle size={14} className="mb-2 text-[#087F5B]" />
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {busy && (
-            <div className="flex items-center gap-2 text-sm text-[#66736B]">
-              <Loader2 size={16} className="animate-spin text-[#087F5B]" />
-              Thinking…
+            <div className="flex justify-start">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E8F5EF] text-[#087F5B]">
+                  <Bot size={16} />
+                </span>
+                <div className="rounded-2xl bg-[#F3F7F4] px-4 py-3 text-xs text-[#66736B] flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" /> Thinking...
+                </div>
+              </div>
             </div>
           )}
-
           <div ref={endRef} />
         </div>
 
-        <div className="border-t border-[#E4EDE8] bg-[#FAFCFB] p-4">
-          <div className="flex gap-2 rounded-2xl border border-[#DCE5DF] bg-white p-2 shadow-sm">
+        {/* Quick starter questions */}
+        <div className="border-t border-[#EEF3F0] bg-[#FCFDFC] px-5 py-3">
+          <p className="text-xs text-[#78867D] mb-2 font-medium">Quick suggestions:</p>
+          <div className="flex flex-wrap gap-2">
+            {quickQuestions.map((q, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setInput(q)}
+                className="rounded-full border border-[#DCE5DF] bg-white px-3 py-1 text-xs text-[#526057] hover:border-[#087F5B] hover:text-[#087F5B] transition-colors"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat input */}
+        <div className="border-t border-[#E4EDE8] p-4 bg-white">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendMessage();
+            }}
+            className="flex items-center gap-2"
+          >
             <input
+              type="text"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Ask about a medication…"
-              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-[#17211B] outline-none placeholder:text-[#98A59E]"
-              aria-label="Ask the medication AI a question"
-              disabled={busy}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a question about medication, timing, or side effects..."
+              className="flex-1 rounded-xl border border-[#DCE5DF] bg-[#FAFCFA] px-4 py-2.5 text-sm outline-none focus:border-[#087F5B] focus:ring-2 focus:ring-[#087F5B]/20"
             />
             <button
-              type="button"
-              onClick={sendMessage}
-              disabled={!input.trim() || busy}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#087F5B] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#043A2B] disabled:cursor-not-allowed disabled:opacity-50"
+              type="submit"
+              disabled={busy || !input.trim()}
+              aria-label="Send message"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#087F5B] text-white hover:bg-[#066F50] disabled:opacity-50 transition-colors"
             >
               <Send size={16} />
-              Send
             </button>
-          </div>
-          <p className="mt-2 text-[11px] leading-5 text-[#8A9790]">
-            Do not use this chat to decide whether to start, stop, or change a medication. Use the Safety Check for individualized review.
-          </p>
+          </form>
         </div>
       </div>
     </section>

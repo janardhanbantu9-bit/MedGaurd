@@ -14,25 +14,39 @@ export async function checkDuplicateTherapy({ newMeds, currentMeds }) {
     ];
 
     for (const { med: other, tag } of others) {
-      const sameIngredient =
-        (med.ingredientRxCui && med.ingredientRxCui === other.ingredientRxCui) ||
-        med.ingredientName?.toLowerCase() === other.ingredientName?.toLowerCase();
+      // Check ALL ingredients across both medications (catches combo duplicates like Percocet + Tylenol)
+      const medIngs = (med.ingredients?.length ? med.ingredients : [{ rxCui: med.ingredientRxCui, name: med.ingredientName }]).filter(Boolean);
+      const otherIngs = (other.ingredients?.length ? other.ingredients : [{ rxCui: other.ingredientRxCui, name: other.ingredientName }]).filter(Boolean);
 
-      if (sameIngredient) {
+      let sharedIngredient = null;
+      for (const mIng of medIngs) {
+        for (const oIng of otherIngs) {
+          if (
+            (mIng.rxCui && oIng.rxCui && mIng.rxCui === oIng.rxCui) ||
+            (mIng.name && oIng.name && mIng.name.toLowerCase() === oIng.name.toLowerCase())
+          ) {
+            sharedIngredient = mIng.name || oIng.name;
+            break;
+          }
+        }
+        if (sharedIngredient) break;
+      }
+
+      if (sharedIngredient) {
         findings.push({
           category: 'Duplicate Therapy',
           severity: 'high',
           title: `Duplicate ingredient: ${med.name} and ${other.name}`,
-          summary: `${med.name} and ${other.name} contain the same active ingredient (${med.ingredientName}).`,
+          summary: `${med.name} and ${other.name} both contain the active ingredient "${sharedIngredient}". Combining them may lead to accidental overdose or additive toxicity.`,
           affectedMeds: [`${med.name} (New)`, `${other.name} (${tag})`],
-          evidenceSource: 'RxNorm ingredient match',
-          evidence: [{ source: 'RxNorm', snippet: `Both resolve to ingredient "${med.ingredientName}".` }],
-          action: 'Verify whether both prescriptions are intended.',
+          evidenceSource: 'RxNorm active ingredient matching',
+          evidence: [{ source: 'RxNorm', snippet: `Both medications contain active ingredient "${sharedIngredient}".` }],
+          action: 'Verify whether duplicate therapy is clinically intended or accidental before dispensing.',
         });
         continue;
       }
 
-      // Longest shared ATC code (level 3 = 4 chars, level 4 = 5 chars).
+      // Longest shared ATC code (level 3 = 4 chars, level 4 = 5 chars)
       const otherIds = atcIds(other);
       const shared = atcIds(med)
         .flatMap((a) => otherIds.filter((b) => b.id === a.id).map(() => a))

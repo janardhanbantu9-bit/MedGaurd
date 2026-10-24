@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, Clock3, History, Loader2, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { Button } from '../components/ui';
 import { getSafetyHistory } from '../services/api';
+import { formatDate } from '../lib/date';
 
 type AnalysisRow = {
   id: string;
@@ -64,7 +65,7 @@ export default function HistoryScreen({ patientId, setView }: { patientId?: stri
             <article key={item.id} className="rounded-2xl border border-[#DCE5DF] bg-white p-5 shadow-sm md:p-6">
               <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-[#66736B]"><Clock3 size={14} />{new Date(item.created_at).toLocaleString()}</div>
+                  <div className="flex items-center gap-2 text-xs text-[#66736B]"><Clock3 size={14} />{formatDate(item.created_at)}</div>
                   <p className="mt-3 font-medium text-[#17211B]">{meds.length ? meds.map((m) => m.name).filter(Boolean).join(', ') : 'Prescription check'}</p>
                   <p className="mt-1 text-sm text-[#66736B]">{meds.length} {meds.length === 1 ? 'medication' : 'medications'} checked</p>
                 </div>

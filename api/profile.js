@@ -1,6 +1,7 @@
 import { getSupabase } from '../backend/services/supabase.js';
 import { requireUser } from './_auth.js';
 import { getOwnedPatient, getOwnedPatientContext } from './_patient.js';
+import { fail } from './_http.js';
 
 function fallbackName(user) {
   const metadataName = String(user.user_metadata?.full_name ?? '').trim();
@@ -127,11 +128,47 @@ async function handleGet(user, res) {
     return res.status(200).json({ profile });
   } catch (error) {
     console.error('MediGuard profile fetch error:', error);
-    return res.status(500).json({ error: error?.message || 'Could not load your profile' });
+    return fail(res, error, 'Could not load your profile');
+  }
+}
+
+async function handleAddMedication(user, req, res) {
+  const med = req.body?.medication;
+  const name = asString(med?.name);
+  if (!name) {
+    return res.status(400).json({ error: 'Medication name is required.' });
+  }
+
+  try {
+    const patient = await getOwnedPatient(user.id);
+    if (!patient) {
+      return res.status(400).json({ error: 'No health profile found to add medication to.' });
+    }
+
+    const supabaseAdmin = getSupabase();
+    const { data, error } = await supabaseAdmin.from('medications').insert({
+      patient_id: patient.id,
+      name,
+      dose: asString(med?.dose).slice(0, 100) || null,
+      frequency: asString(med?.frequency ?? med?.freq).slice(0, 100) || null,
+      route: asString(med?.route).slice(0, 100) || null,
+      status: 'Active',
+    }).select().single();
+
+    if (error) throw error;
+    const profile = await getOwnedPatientContext(user.id);
+    return res.status(200).json({ profile, addedMedication: data });
+  } catch (error) {
+    console.error('MediGuard add medication error:', error);
+    return fail(res, error, 'Could not add medication to profile');
   }
 }
 
 async function handlePost(user, req, res) {
+  if (req.body?.action === 'add-medication') {
+    return handleAddMedication(user, req, res);
+  }
+
   const validated = validateOnboarding(req.body || {});
   if (validated.errors) {
     return res.status(400).json({ error: validated.errors.join(' ') });
@@ -139,19 +176,14 @@ async function handlePost(user, req, res) {
 
   try {
     const supabaseAdmin = getSupabase();
-
-    // Idempotency: a completed profile is the source of truth. A repeated
-    // Finish Up returns the existing profile without duplicating rows.
     const existing = await getOwnedPatient(user.id);
-    if (existing && existing.onboarding_completed) {
-      const profile = await getOwnedPatientContext(user.id);
-      return res.status(200).json({ profile, created: false, duplicate: true });
-    }
+    const isUpdate = Boolean(req.body?.isUpdate || req.method === 'PUT' || (existing && existing.onboarding_completed));
 
     let patientId = existing?.id ?? null;
 
     if (!patientId) {
       const name = fallbackName(user);
+      // Step 1: Create patient with onboarding_completed = false
       const { data, error } = await supabaseAdmin
         .from('patients')
         .insert({
@@ -161,7 +193,7 @@ async function handlePost(user, req, res) {
           age: validated.age,
           weight_kg: validated.weight_kg,
           height_cm: validated.height_cm,
-          onboarding_completed: true,
+          onboarding_completed: false,
           updated_at: new Date().toISOString(),
         })
         .select('id')
@@ -171,13 +203,16 @@ async function handlePost(user, req, res) {
         if (error.code === '23505') {
           const winner = await getOwnedPatient(user.id);
           if (winner) {
-            const profile = await getOwnedPatientContext(user.id);
-            return res.status(200).json({ profile, created: false, duplicate: true });
+            patientId = winner.id;
+          } else {
+            throw error;
           }
+        } else {
+          throw error;
         }
-        throw error;
+      } else {
+        patientId = data.id;
       }
-      patientId = data.id;
     } else {
       const { error } = await supabaseAdmin
         .from('patients')
@@ -185,13 +220,13 @@ async function handlePost(user, req, res) {
           age: validated.age,
           weight_kg: validated.weight_kg,
           height_cm: validated.height_cm,
-          onboarding_completed: true,
           updated_at: new Date().toISOString(),
         })
         .eq('id', patientId)
         .eq('user_id', user.id);
       if (error) throw error;
 
+      // Clear existing records before replacing
       const cleared = await Promise.all([
         supabaseAdmin.from('medications').delete().eq('patient_id', patientId),
         supabaseAdmin.from('diagnoses').delete().eq('patient_id', patientId),
@@ -200,6 +235,7 @@ async function handlePost(user, req, res) {
       for (const r of cleared) if (r.error) throw r.error;
     }
 
+    // Step 2: Insert child records
     if (validated.medications.length > 0) {
       const { error } = await supabaseAdmin.from('medications').insert(
         validated.medications.map((m) => ({
@@ -214,9 +250,6 @@ async function handlePost(user, req, res) {
       if (error) throw error;
     }
 
-    // Previous conditions reuse the existing diagnoses status structure with a
-    // non-Active status, so the safety pipeline (Active-only) treats them as
-    // history instead of current context.
     const diagnoses = [
       ...validated.currentConditions.map((name) => ({
         patient_id: patientId,
@@ -246,11 +279,22 @@ async function handlePost(user, req, res) {
       if (error) throw error;
     }
 
+    // Step 3: Set onboarding_completed = true ONLY after all inserts succeeded
+    const { error: markError } = await supabaseAdmin
+      .from('patients')
+      .update({
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', patientId)
+      .eq('user_id', user.id);
+    if (markError) throw markError;
+
     const profile = await getOwnedPatientContext(user.id);
-    return res.status(existing ? 200 : 201).json({ profile, created: !existing });
+    return res.status(existing ? 200 : 201).json({ profile, created: !existing, updated: isUpdate });
   } catch (error) {
     console.error('MediGuard profile save error:', error);
-    return res.status(500).json({ error: error?.message || 'Could not save your profile' });
+    return fail(res, error, 'Could not save your profile');
   }
 }
 
@@ -259,6 +303,6 @@ export default async function handler(req, res) {
   if (!user) return;
 
   if (req.method === 'GET') return handleGet(user, res);
-  if (req.method === 'POST') return handlePost(user, req, res);
+  if (req.method === 'POST' || req.method === 'PUT') return handlePost(user, req, res);
   return res.status(405).json({ error: 'Method not allowed' });
 }

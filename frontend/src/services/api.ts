@@ -1,5 +1,6 @@
 import { AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { signOut } from './auth';
 
 export type ApiMedication = {
   name: string;
@@ -17,6 +18,7 @@ export type UiMedication = {
   freq: string;
   route: string;
   intendedDuration: string;
+  ocrText?: string;
 };
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -41,9 +43,17 @@ async function authHeaders(): Promise<Record<string, string>> {
 async function readResponse(response: Response): Promise<any> {
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(
-      data?.error || data?.message || `Request failed (${response.status} ${response.statusText})`
-    );
+    if (response.status === 401) {
+      console.warn('Received 401 Unauthorized from API. Session expired, signing out locally.');
+      void signOut();
+      window.dispatchEvent(new CustomEvent('mediguard:session-expired'));
+    }
+
+    const message = data?.error || data?.message || `Request failed (${response.status} ${response.statusText})`;
+    const err = new Error(message) as Error & { status: number; data: any };
+    err.status = response.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -105,10 +115,11 @@ export async function getProfile() {
   try {
     const data = await get<{ profile?: any }>('/api/profile');
     return data?.profile ?? null;
-  } catch (error) {
+  } catch (error: any) {
     if (
-      error instanceof Error &&
-      /404|no health profile found|no profile|not found/i.test(error.message)
+      error?.status === 404 ||
+      error?.data?.profile === null ||
+      (error instanceof Error && /404|no health profile|no profile|not found/i.test(error.message))
     ) {
       return null;
     }
@@ -116,6 +127,7 @@ export async function getProfile() {
     throw error;
   }
 }
+
 export async function saveOnboardingProfile(payload: OnboardingPayload) {
   const data = await post<{ profile: any; created?: boolean; duplicate?: boolean }>(
     '/api/profile',
@@ -124,14 +136,28 @@ export async function saveOnboardingProfile(payload: OnboardingPayload) {
   return data.profile;
 }
 
+export async function addMedicationToProfile(medication: {
+  name: string;
+  dose?: string;
+  frequency?: string;
+  route?: string;
+}) {
+  const data = await post<{ profile: any; addedMedication: any }>('/api/profile', {
+    action: 'add-medication',
+    medication,
+  });
+  return data.profile;
+}
+
 export async function extractMedications(prescription: string): Promise<UiMedication[]> {
   const data = await post<{ medications: ApiMedication[] }>('/api/extract', { prescription });
   return (data.medications ?? []).map(toUiMedication);
 }
 
-export async function extractMedicationImage(file: File): Promise<UiMedication[]> {
+export async function extractMedicationImage(file: File): Promise<UiMedication[] & { ocrText?: string }> {
   if (!file.type.startsWith('image/')) throw new Error('Choose a prescription image file.');
-  if (file.size > 4 * 1024 * 1024) throw new Error('Choose an image smaller than 4 MB.');
+  // Ensure image does not exceed 3 MB (base64 will be ~4 MB, under Vercel's 4.5 MB limit)
+  if (file.size > 3 * 1024 * 1024) throw new Error('Choose an image 3 MB or smaller to ensure fast processing.');
 
   const image = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -140,8 +166,10 @@ export async function extractMedicationImage(file: File): Promise<UiMedication[]
     reader.readAsDataURL(file);
   });
 
-  const data = await post<{ medications: ApiMedication[] }>('/api/vision-extract', { image });
-  return (data.medications ?? []).map(toUiMedication);
+  const data = await post<{ medications: ApiMedication[]; text?: string }>('/api/vision-extract', { image });
+  const meds = (data.medications ?? []).map(toUiMedication) as UiMedication[] & { ocrText?: string };
+  meds.ocrText = data.text;
+  return meds;
 }
 
 const SEVERITY_UI = {
@@ -186,8 +214,11 @@ export async function getSafetyHistory(patientId: string) {
   return data?.analyses ?? [];
 }
 
-export async function chatWithAI(message: string, patient: unknown) {
-  const data = await post<{ answer: string }>('/api/chat', { message, patient });
+export async function chatWithAI(
+  message: string,
+  patient: unknown,
+  history?: { role: string; content: string }[]
+) {
+  const data = await post<{ answer: string }>('/api/chat', { message, patient, history });
   return data.answer;
 }
-

@@ -2,9 +2,11 @@ import Groq from 'groq-sdk';
 import { extractMedications } from '../backend/pipeline/analyzePrescription.js';
 import { fail } from './_http.js';
 import { requireUser } from './_auth.js';
+import { checkRateLimit } from './_rateLimit.js';
 
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const VISION_MODEL = 'qwen/qwen3.8-27b';
+// 3 MB binary image becomes ~4.0 MB base64, comfortably below Vercel's 4.5 MB body limit
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+const VISION_MODEL = process.env.GROQ_VISION_MODEL || 'llama-3.2-11b-vision-preview';
 const OCR_PROMPT = 'Transcribe only the text that is visibly present in this prescription image. Preserve the wording, numbers, units, and line breaks as faithfully as possible. Do not infer, complete, interpret, or add any text. If a part is unreadable, mark it as [unreadable]. Do not identify medicines beyond what is legible. Return JSON only as {"text":"faithful transcription"}.';
 
 function decodeImage(image) {
@@ -13,7 +15,7 @@ function decodeImage(image) {
   if (!match) throw new Error('Provide a valid base64 PNG, JPEG, WEBP, or GIF image');
   const base64 = match[2];
   const bytes = Math.floor(base64.length * 3 / 4) - (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
-  if (bytes > MAX_IMAGE_BYTES) throw new Error('Image must be approximately 4 MB or smaller');
+  if (bytes > MAX_IMAGE_BYTES) throw new Error('Image must be approximately 3 MB or smaller to process safely');
   return { mimeType: match[1].toLowerCase(), image };
 }
 
@@ -33,10 +35,15 @@ export default async function handler(req, res) {
   const user = await requireUser(req, res);
   if (!user) return;
 
+  const rateCheck = checkRateLimit(`vision:${user.id}`, 15, 60000);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({ error: `Too many image scan requests. Please wait ${rateCheck.retryAfterSeconds} seconds.` });
+  }
+
   try {
     const image = decodeImage(req.body?.image);
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 30000 });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, timeout: 25000 });
     const completion = await groq.chat.completions.create({
       model: VISION_MODEL,
       temperature: 0,
@@ -50,7 +57,7 @@ export default async function handler(req, res) {
       }],
     });
     const text = parseVisionJson(completion.choices?.[0]?.message?.content);
-    if (!text) throw new Error('No readable text was found in the image');
+    if (!text) throw new Error('No readable text was found in the image. Please try a clearer picture or enter text manually.');
     const extraction = await extractMedications(text);
     return res.status(200).json({ text, ...extraction });
   } catch (error) {
