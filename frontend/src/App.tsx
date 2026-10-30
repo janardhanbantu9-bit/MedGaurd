@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import DashboardScreen from './screens/DashboardScreen';
@@ -13,60 +12,49 @@ import LoginScreen from './screens/LoginScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import { supabase } from './lib/supabase';
 import { getProfile, saveOnboardingProfile } from './services/api';
-import { BookOpenCheck, BrainCircuit, Database, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
+import { LogOut, RefreshCw } from 'lucide-react';
 
-function HowItWorksScreen() {
-  const sources = [
-    { title: 'RxNorm', detail: 'Matches medication names to standardized drug concepts and active ingredients.', icon: BookOpenCheck },
-    { title: 'RxClass', detail: 'Adds recognized therapeutic class information to support class-level comparisons.', icon: Database },
-    { title: 'openFDA', detail: 'Looks up official drug labeling, including warnings, interactions and dosage sections.', icon: ShieldCheck },
-    { title: 'Deterministic safety checks', detail: 'Applies transparent checks to allergies, medication overlaps, conditions and available dose limits.', icon: ShieldCheck },
-    { title: 'AI explanation', detail: 'Turns source-backed findings into plain language. It does not make the final safety decision.', icon: BrainCircuit },
-  ];
-
-  return (
-    <section className="mx-auto max-w-5xl px-6 py-10 md:px-10 md:py-14">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#087F5B]">Behind the check</p>
-      <h1 className="font-serif text-4xl tracking-tight text-[#17211B] md:text-5xl">How it works</h1>
-      <p className="mt-3 max-w-2xl leading-7 text-[#66736B]">MediGuard brings together established drug references and consistent checks to help you review a prescription with more context.</p>
-      <div className="mt-9 divide-y divide-[#E5ECE7] rounded-3xl border border-[#DCE5DF] bg-white px-6 md:px-8">
-        {sources.map(({ title, detail, icon: Icon }, index) => (
-          <article key={title} className="flex gap-4 py-6">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8F5EF] text-[#087F5B]"><Icon size={19} /></span>
-            <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#94A198]">Step {index + 1}</p><h2 className="mt-1 font-serif text-xl text-[#173A2C]">{title}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#66736B]">{detail}</p></div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ProfileUnavailable({ message, onRetry, onSignOut }) {
+function ProfileUnavailable({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => void }) {
   return (
     <section className="mx-auto max-w-xl px-6 py-16 md:px-10">
       <div className="rounded-3xl border border-amber-200 bg-amber-50 p-7">
         <h1 className="font-serif text-3xl text-[#173A2C]">Your health profile could not be loaded.</h1>
         <p className="mt-3 text-sm leading-6 text-amber-900">{message}</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <button type="button" onClick={onRetry} className="inline-flex items-center gap-2 rounded-xl bg-[#087F5B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#066F50]"><RefreshCw size={16} />Try again</button>
-          <button type="button" onClick={onSignOut} className="inline-flex items-center gap-2 rounded-xl border border-[#DCE5DF] bg-white px-4 py-2.5 text-sm font-medium text-[#526057] hover:text-[#17211B]"><LogOut size={16} />Sign out</button>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#087F5B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#066F50]"
+          >
+            <RefreshCw size={16} />Try again
+          </button>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE5DF] bg-white px-4 py-2.5 text-sm font-medium text-[#526057] hover:text-[#17211B]"
+          >
+            <LogOut size={16} />Sign out
+          </button>
         </div>
       </div>
     </section>
   );
 }
 
-const App = () => {
+const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('dashboard');
-  const [selectedFinding, setSelectedFinding] = useState(null);
-  const [patients, setPatients] = useState([]);
-  const [extractedMeds, setExtractedMeds] = useState([]);
-  const [analysis, setAnalysis] = useState(null);
+  const [selectedFinding, setSelectedFinding] = useState<any>(null);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [extractedMeds, setExtractedMeds] = useState<any[]>([]);
+  const [analysis, setAnalysis] = useState<any>(null);
   const [scanSession, setScanSession] = useState(0);
-  const [authUser, setAuthUser] = useState(null);
+  const [authUser, setAuthUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [patientError, setPatientError] = useState('');
+
+  // Track the user id for whom the profile was loaded to prevent reloading on tab focus
+  const loadedUserIdRef = useRef<string | null>(null);
 
   const activePatient = patients[0] || null;
 
@@ -77,22 +65,30 @@ const App = () => {
     setAnalysis(null);
     setExtractedMeds([]);
     setCurrentView('dashboard');
+    loadedUserIdRef.current = null;
   }, []);
 
-  const loadUserContext = useCallback(async (user) => {
+  const loadUserContext = useCallback(async (user: any, isBackground = false) => {
     setAuthUser(user);
-    setLoadingPatients(true);
+    if (!isBackground) {
+      setLoadingPatients(true);
+    }
     setPatientError('');
 
     try {
       const profile = await getProfile();
       setPatients(profile ? [profile] : []);
-    } catch (error) {
+      loadedUserIdRef.current = user.id;
+    } catch (error: any) {
       console.error('MediGuard profile bootstrap failed:', error);
-      setPatients([]);
-      setPatientError(error?.message || 'Could not load your health profile.');
+      if (!isBackground) {
+        setPatients([]);
+        setPatientError(error?.message || 'Could not load your health profile.');
+      }
     } finally {
-      setLoadingPatients(false);
+      if (!isBackground) {
+        setLoadingPatients(false);
+      }
     }
   }, []);
 
@@ -105,13 +101,11 @@ const App = () => {
     let mounted = true;
     let authResolved = false;
 
-    // Prevent the app from displaying the startup loader forever if session
-    // initialization stalls. If auth resolves later, the listener can still update state.
     const authTimeout = window.setTimeout(() => {
       if (mounted && !authResolved) {
         authResolved = true;
         console.error('MediGuard auth initialization timed out. Check Supabase configuration/network.');
-        setPatientError('Authentication is taking too long. Check your connection and Supabase configuration, then try refreshing.');
+        setPatientError('Authentication is taking too long. Check your connection, then try refreshing.');
         setAuthLoading(false);
       }
     }, 10000);
@@ -156,16 +150,40 @@ const App = () => {
         setAuthLoading(false);
         return;
       }
-      if (session?.user) {
+
+      if (event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          setAuthUser(session.user);
+        }
         setAuthLoading(false);
-        void loadUserContext(session.user);
+        return;
+      }
+
+      if (session?.user) {
+        setAuthUser(session.user);
+        setAuthLoading(false);
+
+        // TAB REFOCUS / SIGNED_IN FIX:
+        // Supabase triggers SIGNED_IN on tab refocus. If the user id matches what's
+        // already loaded, ignore the event so we do NOT set loadingPatients=true
+        // and unmount the active screen (which would wipe out user input).
+        if (session.user.id !== loadedUserIdRef.current) {
+          void loadUserContext(session.user);
+        }
       }
     });
+
+    const handleSessionExpired = () => {
+      setAuthUser(null);
+      clearAppState();
+    };
+    window.addEventListener('mediguard:session-expired', handleSessionExpired);
 
     return () => {
       mounted = false;
       window.clearTimeout(authTimeout);
       subscription.subscription.unsubscribe();
+      window.removeEventListener('mediguard:session-expired', handleSessionExpired);
     };
   }, [clearAppState, loadUserContext]);
 
@@ -174,9 +192,12 @@ const App = () => {
     clearAppState();
   };
 
-  const handleOnboardingComplete = async (payload) => {
+  const handleOnboardingComplete = async (payload: any) => {
     const profile = await saveOnboardingProfile(payload);
     setPatients([profile]);
+    if (authUser?.id) {
+      loadedUserIdRef.current = authUser.id;
+    }
     setPatientError('');
     setCurrentView('dashboard');
   };
@@ -185,7 +206,7 @@ const App = () => {
     if (authUser) void loadUserContext(authUser);
   };
 
-  const setView = (view) => {
+  const setView = (view: string) => {
     if (view === 'input-rx') {
       setScanSession((session) => session + 1);
       setAnalysis(null);
@@ -197,16 +218,23 @@ const App = () => {
   };
 
   if (authLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-[#F7FAF8] text-sm text-[#66736B]">Loading your private account…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F7FAF8] text-sm text-[#66736B]">
+        Loading your private account…
+      </div>
+    );
   }
 
-  if (!supabase) return <LoginScreen />;
-  if (!authUser) return <LoginScreen />;
+  if (!supabase || !authUser) return <LoginScreen />;
 
   const renderContent = () => {
-    if (loadingPatients) return <div className="p-8 text-sm text-[#66736B]">Loading your health context…</div>;
+    if (loadingPatients) {
+      return <div className="p-8 text-sm text-[#66736B]">Loading your health context…</div>;
+    }
     if (!activePatient) {
-      if (patientError) return <ProfileUnavailable message={patientError} onRetry={retryProfile} onSignOut={handleSignedOut} />;
+      if (patientError) {
+        return <ProfileUnavailable message={patientError} onRetry={retryProfile} onSignOut={handleSignedOut} />;
+      }
       return <OnboardingScreen onComplete={handleOnboardingComplete} />;
     }
     if (!activePatient.onboarding_completed && !activePatient.onboardingCompleted) {
@@ -214,30 +242,60 @@ const App = () => {
     }
 
     switch (currentView) {
-      case 'dashboard': return <DashboardScreen patient={activePatient} setView={setView} />;
-      case 'input-rx': return <InputRxScreen key={scanSession} setView={setCurrentView} setExtractedMeds={setExtractedMeds} />;
-      case 'extract-rx': return <ExtractedRxScreen setView={setCurrentView} patient={activePatient} meds={extractedMeds} setMeds={setExtractedMeds} setAnalysis={setAnalysis} />;
-      case 'analysis': return <AnalysisScreen analysis={analysis} setSelectedFinding={setSelectedFinding} setView={setView} />;
-      case 'history': return <HistoryScreen patientId={activePatient.id} setView={setView} />;
-      case 'how-it-works': return <HowItWorksScreen />;
-      case 'talk-ai': return <TalkToAIScreen patient={activePatient} setView={setView} />;
-      default: return <DashboardScreen patient={activePatient} setView={setView} />;
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            patient={activePatient}
+            setView={setView}
+            onProfileUpdated={(updatedProfile: any) => setPatients([updatedProfile])}
+          />
+        );
+      case 'input-rx':
+        return <InputRxScreen key={scanSession} setView={setCurrentView} setExtractedMeds={setExtractedMeds} />;
+      case 'extract-rx':
+        return (
+          <ExtractedRxScreen
+            setView={setCurrentView}
+            patient={activePatient}
+            meds={extractedMeds}
+            setMeds={setExtractedMeds}
+            setAnalysis={setAnalysis}
+          />
+        );
+      case 'analysis':
+        return <AnalysisScreen analysis={analysis} setSelectedFinding={setSelectedFinding} setView={setView} />;
+      case 'history':
+        return <HistoryScreen patientId={activePatient.id} setView={setView} />;
+      case 'talk-ai':
+        return <TalkToAIScreen patient={activePatient} setView={setView} />;
+      default:
+        return (
+          <DashboardScreen
+            patient={activePatient}
+            setView={setView}
+            onProfileUpdated={(updatedProfile: any) => setPatients([updatedProfile])}
+          />
+        );
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F7FAF8] font-sans text-[#17211B] flex flex-col md:flex-row overflow-hidden">
+    <div className="min-h-[100dvh] bg-[#F7FAF8] font-sans text-[#17211B] flex flex-col md:flex-row overflow-hidden">
       <Sidebar currentView={currentView} setView={setView} />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-[100dvh] overflow-hidden relative">
         <Topbar user={authUser} onSignedOut={handleSignedOut} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {patientError && activePatient && currentView === 'dashboard' && (
-            <div className="m-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:m-8">Some profile details could not be loaded: {patientError}</div>
+            <div className="m-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 md:m-8">
+              Some profile details could not be loaded: {patientError}
+            </div>
           )}
           {renderContent()}
         </main>
       </div>
-      {selectedFinding && <FindingDetailPanel finding={selectedFinding} onClose={() => setSelectedFinding(null)} />}
+      {selectedFinding && (
+        <FindingDetailPanel finding={selectedFinding} onClose={() => setSelectedFinding(null)} />
+      )}
     </div>
   );
 };

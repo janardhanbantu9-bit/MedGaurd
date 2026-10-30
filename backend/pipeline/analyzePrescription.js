@@ -23,25 +23,54 @@ function toMedication(med = {}) {
   };
 }
 
-// Reference lookups are the same for every request, so keep them for the life of the instance.
+// Bounded LRU cache (max 150 items) so instances don't leak memory indefinitely.
+const MAX_CACHE_SIZE = 150;
 const lookupCache = new Map();
+
 function cached(key, load) {
-  if (!lookupCache.has(key)) {
-    lookupCache.set(
-      key,
-      load().catch((error) => {
-        lookupCache.delete(key);
-        throw error;
-      })
-    );
+  if (lookupCache.has(key)) {
+    const val = lookupCache.get(key);
+    lookupCache.delete(key);
+    lookupCache.set(key, val);
+    return val;
   }
-  return lookupCache.get(key);
+
+  const promise = load()
+    .then((result) => {
+      // Do not permanently retain empty or failed resolution results
+      if (!result || (typeof result === 'object' && !result.rxCui && !result.label && (!result.classes || result.classes.length === 0))) {
+        lookupCache.delete(key);
+      }
+      return result;
+    })
+    .catch((error) => {
+      lookupCache.delete(key);
+      throw error;
+    });
+
+  if (lookupCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = lookupCache.keys().next().value;
+    if (firstKey) lookupCache.delete(firstKey);
+  }
+
+  lookupCache.set(key, promise);
+  return promise;
 }
 
 async function enrich(med, warnings) {
   const key = med.name.toLowerCase();
   const info = {
     ...med,
+<<<<<<< HEAD
+    rxCui: null,
+    ingredientRxCui: null,
+    ingredientName: med.name,
+    ingredients: [{ rxCui: null, name: med.name }],
+    classes: [],
+    label: null,
+    classLookupFailed: false,
+    labelLookupFailed: false,
+=======
     status: 'unresolved',
     rxCui: null,
     ingredientRxCui: null,
@@ -50,15 +79,34 @@ async function enrich(med, warnings) {
     label: null,
     labelEvidence: { status: 'unavailable', reason: 'Medication has not been normalized.' },
     normalization: { status: 'unresolved', reason: 'Medication has not been normalized.' },
+>>>>>>> main
   };
 
   try {
-    Object.assign(info, await cached(`rxnorm:${key}`, () => normalizeDrug(med.name)));
+    const norm = await cached(`rxnorm:${key}`, () => normalizeDrug(med.name));
+    Object.assign(info, norm);
   } catch (error) {
     warnings.push(`Could not normalize "${med.name}" with RxNorm (${error.message}).`);
     info.normalization = { status: 'unresolved', reason: 'RxNorm lookup failed.' };
   }
 
+<<<<<<< HEAD
+  try {
+    if (info.ingredientRxCui) {
+      info.classes = await cached(`rxclass:${info.ingredientRxCui}`, () => getDrugClasses(info.ingredientRxCui));
+    }
+  } catch (error) {
+    warnings.push(`Drug class lookup failed for "${med.name}" (${error.message}).`);
+    info.classLookupFailed = true;
+  }
+
+  try {
+    const candidates = [info.ingredientName, med.name, ...(info.ingredients ?? []).map((i) => i.name)];
+    info.label = await cached(`label:${key}`, () => getDrugLabel(candidates));
+  } catch (error) {
+    warnings.push(`FDA label lookup failed for "${med.name}" (${error.message}).`);
+    info.labelLookupFailed = true;
+=======
   if (info.status !== 'resolved' || !info.ingredientRxCui) {
     return info;
   }
@@ -92,7 +140,9 @@ async function enrich(med, warnings) {
     warnings.push(`FDA label lookup failed for "${med.name}" (${error.message}).`);
     info.label = null;
     info.labelEvidence = { status: 'unavailable', reason: 'FDA label lookup failed.' };
+>>>>>>> main
   }
+
   return info;
 }
 
@@ -157,8 +207,13 @@ export async function extractMedications(prescription = '') {
   return { medications: meds.map(publicMed), warnings };
 }
 
+<<<<<<< HEAD
+/** Step 2: run deterministic safety checks, then enrich with AI explanations. */
+export async function analyzeSafety({ patient = {}, medications = [] }) {
+=======
 /** Step 2: run the deterministic safety checks, then ask the LLM to explain them. */
 export async function analyzeSafety({ patient = {}, medications = [], checks = CHECKS }) {
+>>>>>>> main
   const warnings = [];
   const requested = medications.map(toMedication).filter((m) => m.name);
   if (requested.length === 0) throw new Error('At least one medication is required');
@@ -168,6 +223,33 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
     Promise.all((patient.currentMeds ?? []).map((m) => enrich(toMedication(m), warnings))),
   ]);
 
+<<<<<<< HEAD
+  const context = { patient, newMeds, currentMeds };
+
+  // Never let an unhandled check exception silently produce "safe"
+  const results = await Promise.all(
+    CHECKS.map(async (check) => {
+      try {
+        return await check(context);
+      } catch (error) {
+        const checkName = check.name.replace(/^check/, '');
+        warnings.push(`${checkName} check failed: ${error.message}`);
+        return [
+          {
+            category: 'Safety Coverage',
+            severity: 'review',
+            title: `Could not complete ${checkName} check`,
+            summary: `Automated ${checkName} safety checking could not run completely due to an error: ${error.message}. This check must be verified manually.`,
+            affectedMeds: newMeds.map((m) => `${m.name} (New)`),
+            evidenceSource: 'MediGuard Safety Engine',
+            evidence: [{ source: 'System Notice', snippet: `Check failed: ${error.message}` }],
+            action: 'Review this safety aspect manually with standard references before dispensing.',
+          },
+        ];
+      }
+    })
+  );
+=======
   // Unresolved names never enter identity-dependent checks as though they had been
   // identified. Their state is surfaced below instead.
   const resolvedNewMeds = newMeds.filter((med) => med.status === 'resolved');
@@ -176,6 +258,7 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
   const context = { patient, newMeds: resolvedNewMeds, currentMeds: resolvedCurrentMeds };
   const checkStatuses = await executeSafetyChecks(context, checks);
   const findings = checkStatuses.flatMap((result) => result.findings);
+>>>>>>> main
 
   for (const med of unresolvedCurrentMeds) {
     findings.push({
@@ -194,9 +277,64 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
     warnings.push(`${result.name} failed: ${result.error?.message ?? result.reason}`);
   }
 
-  // Never report "safe" for something we could not check.
+  // Check if any CURRENT medications could not be resolved or lack FDA labels
+  // An unresolved current medication prevents complete drug-drug interaction checking
+  const unresolvedCurrent = currentMeds.filter((m) => !m.label);
+  for (const cur of unresolvedCurrent) {
+    findings.push({
+      category: 'Data Coverage',
+      severity: 'review',
+      title: `Could not check interactions with current med: ${cur.name}`,
+      summary: `No FDA drug label was found for your current medication ${cur.name}. Automated drug-drug interaction and duplicate therapy checks between new prescriptions and ${cur.name} could not be completed.`,
+      affectedMeds: [`${cur.name} (Current)`],
+      evidenceSource: 'openFDA drug label lookup',
+      evidence: [],
+      action: 'Confirm drug-drug interactions between your new medication and this medicine with your pharmacist.',
+    });
+  }
+
+  // Evaluate new medications:
+  // "Safe" must NEVER be the failure state.
   for (const med of newMeds) {
     const label = `${med.name} (New)`;
+<<<<<<< HEAD
+    const medFindings = findings.filter((f) => f.affectedMeds?.includes(label));
+    const hasHighOrReview = medFindings.some((f) => f.severity === 'high' || f.severity === 'review');
+
+    if (!med.label) {
+      findings.push({
+        category: 'Data Coverage',
+        severity: 'review',
+        title: `Could not verify: No FDA label for ${med.name}`,
+        summary: `No matching FDA drug label was found for "${med.name}". Automated label checks (drug-drug interactions, contraindications, dosage limits) could not run.`,
+        affectedMeds: [label],
+        evidenceSource: 'openFDA drug label lookup',
+        evidence: [],
+        action: 'Check this medication manually against a trusted drug reference.',
+      });
+    } else if (med.classLookupFailed) {
+      findings.push({
+        category: 'Data Coverage',
+        severity: 'review',
+        title: `Could not verify drug class for ${med.name}`,
+        summary: `RxClass lookup for ${med.name} was unavailable. Class-based allergy cross-reactivity and duplicate therapy checks could not be fully completed.`,
+        affectedMeds: [label],
+        evidenceSource: 'RxClass drug classification',
+        evidence: [],
+        action: 'Review drug class and potential cross-reactivities manually.',
+      });
+    } else if (!hasHighOrReview && unresolvedCurrent.length === 0) {
+      // ONLY emit green "safe" card if:
+      // 1. Drug label was found and analyzed.
+      // 2. Class lookup succeeded.
+      // 3. All current medications were resolved and checked.
+      // 4. No high or review findings exist for this medication.
+      findings.push({
+        category: 'General Safety',
+        severity: 'safe',
+        title: `No flagged conflicts found for ${med.name}`,
+        summary: `No allergy, interaction, duplicate-therapy, drug-disease or dose conflicts were detected for ${med.name} in the available FDA label and clinical classification records. This check is not a guarantee of individual safety.`,
+=======
     if (med.status !== 'resolved') {
       findings.push(unableFinding(
         med,
@@ -232,6 +370,7 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
         severity: 'safe',
         title: `No conflicts found for ${med.name}`,
         summary: `No relevant conflict was identified for ${med.name} by the completed checks and sources reviewed (FDA label text, RxClass). This is not a guarantee of safety.`,
+>>>>>>> main
         affectedMeds: [label],
         evidenceSource: 'openFDA drug label; RxNorm; RxClass',
         evidence: [],
@@ -244,7 +383,7 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
     f.id = `f${i + 1}`;
   });
 
-  // Plain-language explanations. Failure here must not lose the findings.
+  // Plain-language explanations via Groq. Failure here must not lose the findings.
   const explainable = findings.filter((f) => f.severity !== 'safe');
   if (explainable.length > 0) {
     try {
@@ -267,7 +406,7 @@ export async function analyzeSafety({ patient = {}, medications = [], checks = C
         }
       }
     } catch (error) {
-      warnings.push(`AI explanations unavailable (${error.message}). Findings below come directly from the source data.`);
+      warnings.push(`AI explanations unavailable (${error.message}). Findings below come directly from verified source data.`);
     }
   }
 

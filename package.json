@@ -11,9 +11,8 @@
     "vercel-build": "cd frontend && npm run build"
   },
   "dependencies": {
-    "@supabase/supabase-js": "latest",
-    "groq-sdk": "latest",
-    "multer": "latest",
-    "zod": "latest"
+    "@supabase/supabase-js": "^2.49.1",
+    "groq-sdk": "^0.15.0",
+    "zod": "^3.24.2"
   }
 }

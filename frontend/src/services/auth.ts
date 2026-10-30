@@ -29,6 +29,21 @@ export async function signUp(email: string, password: string, fullName: string) 
 
 export async function signOut() {
   if (!supabase) return;
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.warn('Supabase sign-out encountered an error (e.g. offline), clearing local session:', error);
+  } finally {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+          localStorage.removeItem(key);
+        }
+      }
+      sessionStorage.clear();
+    } catch {
+      // Ignore storage access errors
+    }
+  }
 }

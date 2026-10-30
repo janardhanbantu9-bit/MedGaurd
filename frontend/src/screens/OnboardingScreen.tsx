@@ -15,17 +15,22 @@ const SurveyListInput = ({
   placeholder,
   buttonText = 'Add',
   requireStatus = false,
+  inputValue,
+  onInputValueChange,
+  statusValue = 'Resolved',
+  onStatusValueChange,
 }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [statusValue, setStatusValue] = useState('Resolved');
-
   const handleAdd = () => {
     const name = inputValue.trim();
     if (!name) return;
-    onAdd(requireStatus
-      ? { id: generateId(), name, status: statusValue }
-      : { id: generateId(), name });
-    setInputValue('');
+
+    onAdd(
+      requireStatus
+        ? { id: generateId(), name, status: statusValue }
+        : { id: generateId(), name }
+    );
+
+    onInputValueChange('');
   };
 
   return (
@@ -34,7 +39,7 @@ const SurveyListInput = ({
         <input
           type="text"
           value={inputValue}
-          onChange={(event) => setInputValue(event.target.value)}
+          onChange={(event) => onInputValueChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
@@ -44,10 +49,11 @@ const SurveyListInput = ({
           placeholder={placeholder}
           className="min-w-0 flex-1 rounded-xl border border-[#E4EDE8] bg-white px-4 py-3 text-[#111814] transition-all placeholder:text-gray-400 focus:border-[#087F5B] focus:outline-none focus:ring-1 focus:ring-[#087F5B]"
         />
+
         {requireStatus && (
           <select
             value={statusValue}
-            onChange={(event) => setStatusValue(event.target.value)}
+            onChange={(event) => onStatusValueChange(event.target.value)}
             aria-label="Condition status"
             className="w-32 shrink-0 rounded-xl border border-[#E4EDE8] bg-white px-2 py-3 text-sm text-[#111814] focus:border-[#087F5B] focus:outline-none sm:w-36 sm:px-4"
           >
@@ -55,6 +61,7 @@ const SurveyListInput = ({
             <option value="Resolved">Resolved</option>
           </select>
         )}
+
         <button
           type="button"
           onClick={handleAdd}
@@ -70,16 +77,19 @@ const SurveyListInput = ({
           {items.map((item) => (
             <div
               key={item.id}
-              className="group flex items-center gap-2 rounded-xl border border-[#E4EDE8] bg-white px-3 py-2 shadow-sm animate-in zoom-in-95 duration-200"
+              className="group flex items-center gap-2 rounded-xl border border-[#E4EDE8] bg-white px-3 py-2 shadow-sm"
             >
               <div className="flex min-w-0 flex-col">
-                <span className="max-w-[220px] break-words text-sm font-medium text-[#111814]">{item.name}</span>
+                <span className="max-w-[220px] break-words text-sm font-medium text-[#111814]">
+                  {item.name}
+                </span>
                 {item.status && (
                   <span className="text-[10px] uppercase tracking-wider text-[#5C6B64]">
                     {item.status}
                   </span>
                 )}
               </div>
+
               <button
                 type="button"
                 aria-label={`Remove ${item.name}`}
@@ -111,6 +121,20 @@ export default function OnboardingScreen({ onComplete }) {
     previousConditions: [],
     allergies: [],
   });
+  const [drafts, setDrafts] = useState({
+  medications: '',
+  currentConditions: '',
+  previousConditions: '',
+  previousConditionStatus: 'Resolved',
+  allergies: '',
+});
+
+const updateDraft = (field, value) => {
+  setDrafts((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
 
   const updateField = (field, value) => {
     setFormData((previous) => ({ ...previous, [field]: value }));
@@ -145,7 +169,44 @@ export default function OnboardingScreen({ onComplete }) {
       setError('Enter your height in centimeters.');
       return;
     }
-    setStep((current) => Math.min(current + 1, 8));
+    const fieldByStep = {
+  4: 'medications',
+  5: 'currentConditions',
+  6: 'previousConditions',
+  7: 'allergies',
+};
+
+const field = fieldByStep[step];
+
+if (field) {
+  const name = drafts[field].trim();
+
+  if (name) {
+    const item =
+      step === 6
+        ? {
+            id: generateId(),
+            name,
+            status: drafts.previousConditionStatus,
+          }
+        : {
+            id: generateId(),
+            name,
+          };
+
+    setFormData((previous) => ({
+      ...previous,
+      [field]: [...previous[field], item],
+    }));
+
+    setDrafts((previous) => ({
+      ...previous,
+      [field]: '',
+    }));
+  }
+}
+
+setStep((current) => Math.min(current + 1, 8));
   };
 
   const handleFinish = async () => {
@@ -350,6 +411,8 @@ export default function OnboardingScreen({ onComplete }) {
             items={formData.medications}
             onAdd={(item) => updateField('medications', [...formData.medications, item])}
             onRemove={(id) => updateField('medications', formData.medications.filter((item) => item.id !== id))}
+            inputValue={drafts.medications}
+onInputValueChange={(value) => updateDraft('medications', value)}
           />
         </SurveyQuestionLayout>
       )}
@@ -361,6 +424,8 @@ export default function OnboardingScreen({ onComplete }) {
             items={formData.currentConditions}
             onAdd={(item) => updateField('currentConditions', [...formData.currentConditions, item])}
             onRemove={(id) => updateField('currentConditions', formData.currentConditions.filter((item) => item.id !== id))}
+            inputValue={drafts.currentConditions}
+onInputValueChange={(value) => updateDraft('currentConditions', value)}
           />
         </SurveyQuestionLayout>
       )}
@@ -373,6 +438,10 @@ export default function OnboardingScreen({ onComplete }) {
             items={formData.previousConditions}
             onAdd={(item) => updateField('previousConditions', [...formData.previousConditions, item])}
             onRemove={(id) => updateField('previousConditions', formData.previousConditions.filter((item) => item.id !== id))}
+            inputValue={drafts.previousConditions}
+onInputValueChange={(value) => updateDraft('previousConditions', value)}
+statusValue={drafts.previousConditionStatus}
+onStatusValueChange={(value) => updateDraft('previousConditionStatus', value)}
           />
         </SurveyQuestionLayout>
       )}
@@ -384,6 +453,8 @@ export default function OnboardingScreen({ onComplete }) {
             items={formData.allergies}
             onAdd={(item) => updateField('allergies', [...formData.allergies, item])}
             onRemove={(id) => updateField('allergies', formData.allergies.filter((item) => item.id !== id))}
+            inputValue={drafts.allergies}
+onInputValueChange={(value) => updateDraft('allergies', value)}
           />
         </SurveyQuestionLayout>
       )}
