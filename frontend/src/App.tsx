@@ -144,7 +144,6 @@ const App: React.FC = () => {
       if (!mounted) return;
       authResolved = true;
       window.clearTimeout(authTimeout);
-
       if (event === 'SIGNED_OUT') {
         setAuthUser(null);
         clearAppState();
