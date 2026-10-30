@@ -95,6 +95,7 @@ export function doseToMg(value) {
 export function dosesPerDay(value) {
   if (value == null) return null;
   const text = normalizeText(value);
+<<<<<<< HEAD
   if (!text) return null;
 
   // Explicitly reject non-daily schedules from being counted as daily
@@ -146,7 +147,36 @@ export function dosesPerDay(value) {
   };
 
   if (standard[text] != null) return standard[text];
+=======
+  const explicit = text.match(/\b(\d+(?:\.\d+)?)\s*(?:times|doses?)\s*(?:per|a|\/)?\s*(?:day|daily)\b/);
+  if (explicit) return Number(explicit[1]);
+  const every = text.match(/\b(?:every\s+|q)(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
+  if (every && Number(every[1]) > 0) return 24 / Number(every[1]);
+  const common = [
+    [/\b(?:four\s+times(?:\s+(?:(?:a\s+)?day|daily))?|qid)\b/, 4],
+    [/\b(?:three\s+times(?:\s+(?:(?:a\s+)?day|daily))?|tid)\b/, 3],
+    [/\b(?:twice(?:\s+(?:(?:a\s+)?day|daily))?|bid)\b/, 2],
+    [/\b(?:once(?:\s+(?:(?:a\s+)?day|daily))?|daily)\b/, 1],
+  ];
+  const matched = common.find(([pattern]) => pattern.test(text));
+  if (matched) return matched[1];
+>>>>>>> main
   return null;
+}
+
+/** True when wording expressly says the apparent risk is absent. */
+export function hasNegatedSafetyLanguage(text) {
+  const normalized = normalizeText(text);
+  return /\b(?:not|no|without|never)\b(?:\W+\w+){0,4}\W+(?:contraindicat(?:ed|ion)?|avoid(?:ed|ance)?|recommend(?:ed|ation)?|serious|fatal|life[- ]threatening|severe)\b/i.test(normalized);
+}
+
+/**
+ * High severity requires direct, non-negated contraindication-level wording.
+ * Generic warning language remains a review finding.
+ */
+export function hasDefinitiveSafetyLanguage(text) {
+  if (hasNegatedSafetyLanguage(text)) return false;
+  return /\b(?:contraindicat(?:ed|ion)?|fatal|life[- ]threatening)\b/i.test(String(text ?? ''));
 }
 
 export function sectionText(label, ...sections) {

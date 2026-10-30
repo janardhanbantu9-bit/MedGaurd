@@ -1,4 +1,4 @@
-import { findSnippet, sectionText, termRegex } from '../utils/normalize.js';
+import { findSnippet, hasNegatedSafetyLanguage, sectionText, termRegex } from '../utils/normalize.js';
 
 // Medical abbreviations and clinical conditions mapped to terms used in FDA drug labels
 const DIAGNOSIS_TERMS = [
@@ -28,9 +28,15 @@ function termsFor(name) {
   return cleaned ? [cleaned] : [];
 }
 
-export async function checkDrugDisease({ patient, newMeds }) {
+export async function checkDrugDisease({ patient, newMeds = [] }) {
   const findings = [];
+  if (!newMeds?.length) return { findings, state: 'not_applicable' };
   const diagnoses = (patient?.diagnoses ?? []).filter((d) => !d.status || /active/i.test(d.status));
+  if (diagnoses.length === 0) return { findings, state: 'passed' };
+
+  // Label text is the evidence source. A missing label means disease conflicts
+  // for that medication could not be checked.
+  let state = newMeds.some((med) => !med?.label) ? 'unable_to_check' : 'passed';
 
   for (const med of newMeds) {
     if (!med.label) continue;
@@ -48,6 +54,7 @@ export async function checkDrugDisease({ patient, newMeds }) {
       // even if the drug is indicated for another stage of the condition
       // (e.g. beta-blockers in acute decompensated heart failure).
       const contra = findSnippet(contraindications, terms);
+<<<<<<< HEAD
       const boxed = contra ? null : findSnippet(boxedWarnings, terms);
 
       if (contra || boxed) {
@@ -84,7 +91,28 @@ export async function checkDrugDisease({ patient, newMeds }) {
           action: 'Review label monitoring recommendations for this condition.',
         });
       }
+=======
+      const warn = contra ? null : findSnippet(warnings, terms);
+      if (!contra && !warn) continue;
+      const definiteContraindication = Boolean(contra) && !hasNegatedSafetyLanguage(contra);
+
+      findings.push({
+        category: 'Drug–Disease Conflict',
+        severity: definiteContraindication ? 'high' : 'review',
+        title: `${med.name} and ${dx.name}`,
+        summary: definiteContraindication
+          ? `The FDA label lists a contraindication that mentions ${dx.name}, which is an active diagnosis for this patient.`
+          : contra
+            ? `The FDA contraindications text mentions ${dx.name}, but its wording is negated or otherwise not a definite contraindication. Review the cited text.`
+          : `The FDA label carries a warning that mentions ${dx.name}, which is an active diagnosis for this patient.`,
+        affectedMeds: [`${med.name} (New)`],
+        patientContext: [`${dx.name} (Active Diagnosis)`],
+        evidenceSource: `openFDA drug label – ${contra ? 'Contraindications' : 'Warnings'} section`,
+        evidence: [{ source: `${med.name} FDA label (${contra ? 'Contraindications' : 'Warnings'})`, snippet: contra ?? warn }],
+        action: definiteContraindication ? 'Clinician review required before dispensing.' : 'Review the label wording and monitor as appropriate.',
+      });
+>>>>>>> main
     }
   }
-  return findings;
+  return { findings, state };
 }

@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -34,6 +34,9 @@ function devApi(): Plugin {
         };
 
         try {
+          const parsedUrl = new URL(req.url ?? '', 'http://localhost');
+          req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+
           const chunks: Buffer[] = [];
           for await (const chunk of req) chunks.push(chunk as Buffer);
           const raw = Buffer.concat(chunks).toString('utf8');

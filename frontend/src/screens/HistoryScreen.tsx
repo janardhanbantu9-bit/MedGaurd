@@ -26,6 +26,7 @@ export default function HistoryScreen({ patientId, setView }: { patientId?: stri
       setLoading(false);
       return () => { active = false; };
     }
+    setError('');
     setLoading(true);
     getSafetyHistory(patientId)
       .then((rows) => { if (active) setItems(rows); })

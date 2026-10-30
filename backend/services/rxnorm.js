@@ -1,5 +1,6 @@
 const BASE = 'https://rxnav.nlm.nih.gov/REST';
 
+<<<<<<< HEAD
 // Curated dictionary of common high-risk combination medications to guarantee
 // complete ingredient resolution even under RxNav network latency or downtime.
 const KNOWN_COMBINATIONS = {
@@ -40,6 +41,34 @@ const KNOWN_COMBINATIONS = {
     { name: 'acetaminophen', rxCui: '161' },
   ],
 };
+=======
+function comparableName(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[®™]/g, '')
+    // Strength and common dosage-form words do not identify a different active drug.
+    .replace(/\b\d+(?:\.\d+)?\s*(?:mcg|μg|ug|mg|g|ml|%|units?)\b/g, ' ')
+    .replace(/\b(?:oral|topical|ophthalmic|otic|nasal|inhalation|extended|delayed|immediate|release|tablet|tablets|capsule|capsules|solution|suspension|cream|ointment|patch|injection|injectable)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function unresolved(input, reason, candidates = []) {
+  return {
+    input,
+    status: 'unresolved',
+    rxCui: null,
+    ingredientRxCui: null,
+    ingredientName: null,
+    normalization: {
+      status: 'unresolved',
+      reason,
+      candidates: candidates.map(({ rxcui, name, score, rank, source }) => ({ rxcui, name, score, rank, source })),
+    },
+  };
+}
+>>>>>>> main
 
 async function getJson(url) {
   const response = await fetch(url, {
@@ -54,6 +83,7 @@ export async function normalizeDrug(name) {
   const trimmed = String(name || '').trim();
   if (!trimmed) throw new Error('Drug name is required');
 
+<<<<<<< HEAD
   const lower = trimmed.toLowerCase();
   const knownCombo = KNOWN_COMBINATIONS[lower];
 
@@ -69,6 +99,52 @@ export async function normalizeDrug(name) {
   } catch (error) {
     // If exact/approx lookup fails but knownCombo exists, we still have reliable data
     if (!knownCombo) throw error;
+=======
+  let rxCui = null;
+  let normalization = null;
+  const exact = await getJson(`${BASE}/rxcui.json?name=${encodeURIComponent(trimmed)}&search=2`);
+  rxCui = exact?.idGroup?.rxnormId?.[0] ?? null;
+  if (rxCui) {
+    normalization = {
+      status: 'resolved',
+      method: 'exact',
+      queriedName: trimmed,
+      returnedName: exact?.idGroup?.name ?? null,
+    };
+  }
+
+  if (!rxCui) {
+    // ApproximateTerm exposes candidate names, scores, ranks and sources.  Do not
+    // treat its ordering/score as proof of identity: accept only an unambiguous
+    // candidate whose returned name is the same medication after removing strength
+    // and dosage-form words.  Misspellings and brand/generic substitutions require
+    // human confirmation rather than a silent substitution.
+    const approx = await getJson(`${BASE}/approximateTerm.json?term=${encodeURIComponent(trimmed)}&maxEntries=20`);
+    const candidates = approx?.approximateGroup?.candidate ?? [];
+    const requestedName = comparableName(trimmed);
+    const matching = candidates.filter((candidate) => comparableName(candidate?.name) === requestedName && candidate?.rxcui);
+    const uniqueMatches = [...new Map(matching.map((candidate) => [candidate.rxcui, candidate])).values()];
+
+    if (uniqueMatches.length !== 1) {
+      return unresolved(
+        trimmed,
+        uniqueMatches.length > 1
+          ? 'RxNorm returned more than one equally named approximate candidate.'
+          : 'RxNorm did not return an approximate candidate whose name clearly matches the requested medication.',
+        candidates
+      );
+    }
+
+    const candidate = uniqueMatches[0];
+    rxCui = candidate.rxcui;
+    normalization = {
+      status: 'resolved',
+      method: 'approximate_name_verified',
+      queriedName: trimmed,
+      returnedName: candidate.name,
+      candidate: { rxcui: candidate.rxcui, score: candidate.score, rank: candidate.rank, source: candidate.source },
+    };
+>>>>>>> main
   }
 
   let ingredients = [];
@@ -104,9 +180,17 @@ export async function normalizeDrug(name) {
 
   return {
     input: trimmed,
+    status: 'resolved',
     rxCui,
+<<<<<<< HEAD
     ingredientRxCui: primaryIngredient.rxCui ?? rxCui,
     ingredientName: primaryIngredient.name ?? trimmed,
     ingredients,
+=======
+    // When the name is already an ingredient, RxNorm returns no related "IN" concept.
+    ingredientRxCui: ingredientRxCui ?? rxCui,
+    ingredientName: ingredientName ?? trimmed,
+    normalization,
+>>>>>>> main
   };
 }

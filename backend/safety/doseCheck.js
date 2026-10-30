@@ -22,6 +22,9 @@ function maxDailyDosesMg(text) {
 
 export async function checkDose({ newMeds }) {
   const findings = [];
+  let state = 'passed';
+
+  if (!newMeds?.length) return { findings, state: 'not_applicable' };
 
   for (const med of newMeds) {
     // If dose or frequency is completely missing
@@ -41,6 +44,7 @@ export async function checkDose({ newMeds }) {
 
     const perDose = doseToMg(med.dose);
     const perDay = dosesPerDay(med.frequency);
+<<<<<<< HEAD
 
     // If dose could not be parsed, or if schedule is weekly/monthly/PRN
     if (perDose == null || perDay == null) {
@@ -59,6 +63,24 @@ export async function checkDose({ newMeds }) {
 
     if (!med.label) {
       // When label is missing, pipeline data coverage check handles it
+=======
+    if (perDose == null || perDay == null) {
+      state = 'unable_to_check';
+      findings.push({
+        category: 'Dose Check',
+        severity: 'review',
+        title: `Unable to check dose for ${med.name}`,
+        summary: `The prescribed dose or frequency for ${med.name} could not be reliably interpreted, so its daily dose could not be checked against label limits.`,
+        affectedMeds: [`${med.name} (New)`],
+        evidenceSource: 'Prescription instructions',
+        evidence: [{ source: 'Prescription instructions', snippet: `Dose: ${med.dose || 'not provided'}; frequency: ${med.frequency || 'not provided'}` }],
+        action: 'Verify the dose and frequency with the prescriber before relying on this check.',
+      });
+      continue;
+    }
+    if (!med.label) {
+      state = 'unable_to_check';
+>>>>>>> main
       continue;
     }
 
@@ -93,6 +115,10 @@ export async function checkDose({ newMeds }) {
       });
     }
   }
+<<<<<<< HEAD
 
   return findings;
+=======
+  return { findings, state };
+>>>>>>> main
 }

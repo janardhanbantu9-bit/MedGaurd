@@ -7,7 +7,7 @@ import { checkRateLimit } from './_rateLimit.js';
 const MODEL =
   process.env.GROQ_CHAT_MODEL ||
   process.env.GROQ_MODEL ||
-  'llama-3.3-70b-versatile';
+  'openai/gpt-oss-120b';
 
 let client;
 
